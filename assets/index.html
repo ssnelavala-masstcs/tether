@@ -7,57 +7,34 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>Tether - Terminal Controller</title>
     <link rel="stylesheet" href="/css/style.css">
-    <!-- xterm.js from CDN -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 </head>
 <body>
     <div id="app">
         <!-- Header -->
         <header id="header">
-            <button id="menu-btn" aria-label="Open console drawer">☰</button>
             <h1>Tether</h1>
-            <div id="status-indicator" class="disconnected"></div>
+            <div id="header-actions">
+                <button id="new-terminal-btn" aria-label="New Terminal">+ New</button>
+                <button id="refresh-btn" aria-label="Refresh">↻</button>
+            </div>
         </header>
 
-        <!-- Preset Buttons -->
-        <div id="preset-bar">
-            <button class="preset-btn" data-input="ls -la\n">1</button>
-            <button class="preset-btn" data-input="top -n 1\n">2</button>
-            <button class="preset-btn" data-input="df -h\n">3</button>
-            <button class="preset-btn" data-input="free -m\n">4</button>
-            <button class="preset-btn" data-input="\n">Enter</button>
-        </div>
+        <!-- Terminal Tabs -->
+        <div id="terminal-tabs"></div>
 
-        <!-- Custom Input -->
-        <div id="custom-input">
-            <input type="text" id="cmd-input" placeholder="Type command..." autocomplete="off" autocapitalize="off" spellcheck="false">
-            <button id="send-btn">Send</button>
-        </div>
+        <!-- Terminal Views (all visible, scrollable) -->
+        <div id="terminal-views"></div>
 
-        <!-- Terminal Container -->
-        <div id="terminal-container">
-            <div id="terminal"></div>
-        </div>
-
-        <!-- Console Drawer (Right Panel) -->
-        <div id="drawer-overlay"></div>
-        <aside id="drawer">
-            <div id="drawer-header">
-                <h2>Consoles</h2>
-                <button id="drawer-close">✕</button>
-            </div>
-            <button id="new-terminal-btn">+ New Terminal</button>
-            <div id="terminal-list"></div>
-        </aside>
-
-        <!-- Notification Banner -->
-        <div id="notification-banner" class="hidden">
-            <span>Terminal is waiting for input</span>
-            <button id="dismiss-notification">Dismiss</button>
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden">
+            <div class="empty-icon">⌧</div>
+            <p>No terminals open</p>
+            <p class="tmux-hint">Running tmux? Sessions will appear here automatically.</p>
+            <button id="empty-new-btn">+ New Terminal</button>
         </div>
     </div>
 
-    <!-- xterm.js -->
     <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18.0/lib/addon-webgl.min.js"></script>

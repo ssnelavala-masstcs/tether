@@ -2,6 +2,7 @@ mod auth;
 mod pty_manager;
 mod server;
 mod state;
+mod tmux_manager;
 mod ws_handler;
 
 use clap::Parser;
@@ -30,6 +31,10 @@ enum Commands {
         /// Allow LAN access (binds to 0.0.0.0 instead of 127.0.0.1)
         #[arg(long, default_value = "false")]
         allow_lan: bool,
+
+        /// External URL for QR code and redirects (e.g. ngrok URL)
+        #[arg(long)]
+        external_url: Option<String>,
     },
 }
 
@@ -47,8 +52,9 @@ async fn main() {
             password,
             port,
             allow_lan,
+            external_url,
         } => {
-            server::start_server(password, port, allow_lan).await;
+            server::start_server(password, port, allow_lan, external_url).await;
         }
     }
 }

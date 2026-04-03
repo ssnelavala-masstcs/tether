@@ -21,12 +21,13 @@ use rust_embed::RustEmbed;
 #[folder = "assets/"]
 struct Asset;
 
-pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) {
+pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool, external_url: Option<String>) {
     let host = if allow_lan { "0.0.0.0" } else { "127.0.0.1" };
 
     // Initialize state
     let pty_manager = std::sync::Arc::new(crate::pty_manager::PtyManager::new());
     let auth_manager = std::sync::Arc::new(crate::auth::AuthManager::new());
+    let tmux_manager = std::sync::Arc::new(crate::tmux_manager::TmuxManager::new());
 
     if let Some(pwd) = password {
         auth_manager
@@ -37,9 +38,17 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
         info!("No password set - authentication disabled");
     }
 
+    let tmux_available = crate::tmux_manager::TmuxManager::is_available();
+    if tmux_available {
+        info!("tmux detected - existing sessions will be mirrored");
+    } else {
+        info!("tmux not detected - only standalone terminals available");
+    }
+
     let state = AppState {
         pty_manager,
         auth_manager,
+        tmux_manager,
     };
 
     // Build router with auth middleware on protected routes
@@ -54,6 +63,8 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
         .route("/api/terminals", get(list_terminals))
         .route("/api/terminals/new", post(create_terminal))
         .route("/api/terminals/{id}", delete(delete_terminal))
+        .route("/api/tmux/sessions", get(list_tmux_sessions))
+        .route("/api/tmux/pane/capture", get(capture_tmux_pane))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -68,7 +79,7 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
     info!("Starting Tether server on http://{}", addr);
 
     if allow_lan {
-        print_lan_info(port);
+        print_lan_info(port, &external_url);
     }
 
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -76,6 +87,10 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
         .expect("Failed to bind to address");
 
     info!("Server running at http://{}", addr);
+
+    if let Some(ref url) = external_url {
+        info!("External URL (for phone): {}", url);
+    }
 
     axum::serve(
         listener,
@@ -225,8 +240,9 @@ async fn ws_handler(
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
     let terminal_id = params.get("terminal_id").cloned();
+    let tmux_pane = params.get("tmux_pane").cloned();
 
-    ws.on_upgrade(move |socket| handle_ws_connection(socket, state, terminal_id))
+    ws.on_upgrade(move |socket| handle_ws_connection(socket, state, terminal_id, tmux_pane))
 }
 
 async fn list_terminals(State(state): State<AppState>) -> impl IntoResponse {
@@ -268,6 +284,7 @@ async fn delete_terminal(
 async fn generate_qr(
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
+    // Prefer external_url param, fallback to localhost
     let default_url = "http://localhost:8080".to_string();
     let url = params.get("url").unwrap_or(&default_url);
 
@@ -282,7 +299,79 @@ async fn generate_qr(
     ([(header::CONTENT_TYPE, "image/svg+xml")], svg)
 }
 
-fn print_lan_info(port: u16) {
+async fn list_tmux_sessions(State(state): State<AppState>) -> impl IntoResponse {
+    if !crate::tmux_manager::TmuxManager::is_available() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({ "error": "tmux is not available" })),
+        )
+            .into_response();
+    }
+
+    match state.tmux_manager.list_sessions() {
+        Ok(panes) => axum::Json(serde_json::json!({ "panes": panes })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            axum::Json(serde_json::json!({ "error": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn capture_tmux_pane(
+    State(state): State<AppState>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let pane_id = match params.get("pane_id") {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                axum::Json(serde_json::json!({ "error": "pane_id parameter required" })),
+            )
+                .into_response();
+        }
+    };
+
+    match state.tmux_manager.capture_pane(pane_id) {
+        Ok(content) => axum::Json(serde_json::json!({ "content": content })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            axum::Json(serde_json::json!({ "error": e })),
+        )
+            .into_response(),
+    }
+}
+
+fn print_lan_info(port: u16, external_url: &Option<String>) {
+    // If external URL is provided, use it for QR code
+    if let Some(ref url) = external_url {
+        info!("External URL (QR code): {}", url);
+
+        // Generate and print QR code for external URL
+        let qr = qrcode::QrCode::new(url.as_bytes()).unwrap();
+        let modules = qr.to_colors();
+        let size = qr.width();
+        info!("QR Code for: {}", url);
+        for y in (0..size).step_by(2) {
+            let mut line = String::new();
+            for x in 0..size {
+                let top = matches!(modules.get(y * size + x), Some(qrcode::Color::Dark));
+                let bottom =
+                    matches!(modules.get((y + 1) * size + x), Some(qrcode::Color::Dark));
+                match (top, bottom) {
+                    (false, false) => line.push(' '),
+                    (true, false) => line.push('▀'),
+                    (false, true) => line.push('▄'),
+                    (true, true) => line.push('█'),
+                }
+            }
+            info!("  {}", line);
+        }
+        return;
+    }
+
+    // Fallback: print LAN IPs
     if let Ok(ifaces) = get_if_addrs::get_if_addrs() {
         for iface in ifaces.iter() {
             if !iface.is_loopback() && iface.ip().is_ipv4() {

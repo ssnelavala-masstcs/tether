@@ -1,42 +1,79 @@
-// ===== Tether Frontend Application =====
+// ===== Tether Frontend - Multi-Terminal + tmux Mirroring =====
 (function() {
     'use strict';
 
     // State
-    let ws = null;
-    let term = null;
-    let fitAddon = null;
-    let currentTerminalId = null;
-    let terminals = [];
-    let reconnectAttempts = 0;
+    const terminals = new Map(); // terminalId -> { ws, term, fitAddon, el, type: 'pty'|'tmux' }
+    let activeTerminalId = null;
+    let reconnectAttempts = {};
     const MAX_RECONNECT_ATTEMPTS = 10;
     const RECONNECT_DELAY = 2000;
+    let tmuxAvailable = false;
 
     // DOM Elements
-    const elements = {
-        menuBtn: document.getElementById('menu-btn'),
-        drawer: document.getElementById('drawer'),
-        drawerOverlay: document.getElementById('drawer-overlay'),
-        drawerClose: document.getElementById('drawer-close'),
-        newTerminalBtn: document.getElementById('new-terminal-btn'),
-        terminalList: document.getElementById('terminal-list'),
-        terminalContainer: document.getElementById('terminal-container'),
-        terminal: document.getElementById('terminal'),
-        presetBar: document.getElementById('preset-bar'),
-        cmdInput: document.getElementById('cmd-input'),
-        sendBtn: document.getElementById('send-btn'),
-        statusIndicator: document.getElementById('status-indicator'),
+    const els = {
+        header: document.getElementById('header'),
+        tabs: document.getElementById('terminal-tabs'),
+        views: document.getElementById('terminal-views'),
+        emptyState: document.getElementById('empty-state'),
+        newBtn: document.getElementById('new-terminal-btn'),
+        refreshBtn: document.getElementById('refresh-btn'),
+        emptyNewBtn: document.getElementById('empty-new-btn'),
         notificationBanner: document.getElementById('notification-banner'),
         dismissNotification: document.getElementById('dismiss-notification'),
     };
 
-    // ===== Initialize xterm =====
-    function initTerminal() {
+    // ===== Terminal Management =====
+    function createTerminalElement(id, type = 'pty', tmuxPane = null) {
+        const label = type === 'tmux'
+            ? tmuxPane.session_name + ':' + tmuxPane.pane_index
+            : id.substring(0, 8);
+
+        // Create tab button
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'tab-btn';
+        tabBtn.dataset.id = id;
+        tabBtn.dataset.type = type;
+        tabBtn.innerHTML = `
+            <span class="tab-status"></span>
+            <span class="tab-label">${label}</span>
+            <span class="tab-close" data-id="${id}">✕</span>
+        `;
+        tabBtn.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('tab-close')) {
+                activateTerminal(id);
+            }
+        });
+        tabBtn.querySelector('.tab-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeTerminal(id);
+        });
+        els.tabs.appendChild(tabBtn);
+
+        // Create terminal panel
+        const panel = document.createElement('div');
+        panel.className = 'terminal-panel';
+        panel.dataset.id = id;
+        panel.dataset.type = type;
+        const headerLabel = type === 'tmux'
+            ? `tmux: ${tmuxPane.session_name}:${tmuxPane.pane_index}`
+            : `Terminal ${id.substring(0, 8)}`;
+        panel.innerHTML = `
+            <div class="terminal-panel-header">
+                <span class="panel-title">${headerLabel}</span>
+                <span class="panel-status">connecting...</span>
+            </div>
+            <div class="xterm-wrapper">
+                <div class="xterm-container"></div>
+            </div>
+        `;
+        els.views.appendChild(panel);
+
+        // Create xterm instance
         const isMobile = window.innerWidth <= 480;
-        
-        term = new Terminal({
+        const term = new Terminal({
             cursorBlink: true,
-            fontSize: isMobile ? 12 : 14,
+            fontSize: isMobile ? 11 : 13,
             fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace",
             theme: {
                 background: '#000000',
@@ -56,342 +93,366 @@
             scrollback: 10000,
         });
 
-        fitAddon = new FitAddon.FitAddon();
+        const fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
-        
-        // Try WebGL addon for better performance
+
         try {
             const webglAddon = new WebglAddon.WebglAddon();
             term.loadAddon(webglAddon);
-            webglAddon.onContextLoss(() => {
-                webglAddon.dispose();
-            });
+            webglAddon.onContextLoss(() => webglAddon.dispose());
         } catch (e) {
-            console.log('WebGL not available, using canvas fallback');
+            // WebGL not available
         }
 
-        term.open(elements.terminal);
-        
+        const container = panel.querySelector('.xterm-container');
+        term.open(container);
+
         // Handle terminal input
         term.onData(data => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(data);
+            const t = terminals.get(id);
+            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) {
+                t.ws.send(data);
             }
         });
 
         // Handle resize
         term.onResize(size => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'resize',
-                    cols: size.cols,
-                    rows: size.rows,
-                }));
+            const t = terminals.get(id);
+            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) {
+                t.ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
             }
         });
 
-        // Initial fit
-        setTimeout(() => fitAddon.fit(), 100);
-        
-        // Fit on resize
-        window.addEventListener('resize', () => {
-            if (fitAddon) fitAddon.fit();
-        });
+        // Fit after a short delay
+        setTimeout(() => {
+            fitAddon.fit();
+            term.focus();
+        }, 100);
 
-        // Fix iOS keyboard issues
-        const textarea = term.textarea;
-        if (textarea) {
-            textarea.style.position = 'fixed';
-            textarea.style.zIndex = '1000';
-        }
+        // Store terminal data
+        terminals.set(id, { ws: null, term, fitAddon, panel, tabBtn, type, tmuxPane });
+        reconnectAttempts[id] = 0;
+
+        updateEmptyState();
+        return id;
     }
 
     // ===== WebSocket Connection =====
-    function connectWebSocket(terminalId = null) {
+    function connectWebSocket(terminalId, type = 'pty', tmuxPane = null) {
+        const t = terminals.get(terminalId);
+        if (!t) return;
+
+        // Close existing connection
+        if (t.ws) {
+            t.ws.close();
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let url = `${protocol}//${window.location.host}/ws`;
-        if (terminalId) {
-            url += `?terminal_id=${encodeURIComponent(terminalId)}`;
+        let url;
+        if (type === 'tmux' && tmuxPane) {
+            url = `${protocol}//${window.location.host}/ws?tmux_pane=${encodeURIComponent(tmuxPane.pane_id)}`;
+        } else {
+            url = `${protocol}//${window.location.host}/ws?terminal_id=${encodeURIComponent(terminalId)}`;
         }
 
-        if (ws) {
-            ws.close();
-        }
+        t.ws = new WebSocket(url);
 
-        ws = new WebSocket(url);
+        t.ws.onopen = () => {
+            reconnectAttempts[terminalId] = 0;
+            updateTabStatus(terminalId, true);
+            updatePanelStatus(terminalId, true);
+        };
 
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            elements.statusIndicator.classList.remove('disconnected');
-            elements.statusIndicator.classList.add('connected');
-            reconnectAttempts = 0;
-            
-            if (term) {
-                term.focus();
+        t.ws.onmessage = (event) => {
+            if (event.data && typeof event.data === 'string') {
+                t.term.write(event.data);
             }
         };
 
-        ws.onmessage = (event) => {
-            if (term && event.data) {
-                term.write(event.data);
-            }
-        };
+        t.ws.onclose = () => {
+            updateTabStatus(terminalId, false);
+            updatePanelStatus(terminalId, false);
 
-        ws.onclose = () => {
-            console.log('WebSocket disconnected');
-            elements.statusIndicator.classList.remove('connected');
-            elements.statusIndicator.classList.add('disconnected');
-            
             // Attempt reconnect
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                setTimeout(() => {
-                    connectWebSocket(currentTerminalId);
-                }, RECONNECT_DELAY);
+            if (reconnectAttempts[terminalId] < MAX_RECONNECT_ATTEMPTS) {
+                reconnectAttempts[terminalId]++;
+                setTimeout(() => connectWebSocket(terminalId, type, tmuxPane), RECONNECT_DELAY);
             }
         };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+        t.ws.onerror = () => {
+            updateTabStatus(terminalId, false);
         };
     }
 
-    // ===== Terminal Management =====
-    async function createTerminal() {
+    function updateTabStatus(id, connected) {
+        const t = terminals.get(id);
+        if (!t) return;
+        const status = t.tabBtn.querySelector('.tab-status');
+        if (status) {
+            status.className = 'tab-status' + (connected ? '' : ' disconnected');
+        }
+    }
+
+    function updatePanelStatus(id, connected) {
+        const t = terminals.get(id);
+        if (!t) return;
+        const status = t.panel.querySelector('.panel-status');
+        if (status) {
+            status.textContent = connected ? '● connected' : '○ disconnected';
+            status.className = 'panel-status' + (connected ? ' connected' : '');
+        }
+    }
+
+    // ===== Terminal Activation =====
+    function activateTerminal(id) {
+        if (!terminals.has(id)) return;
+
+        // Deactivate all
+        terminals.forEach((t, tid) => {
+            t.tabBtn.classList.remove('active');
+            t.panel.style.display = 'none';
+        });
+
+        // Activate selected
+        const t = terminals.get(id);
+        t.tabBtn.classList.add('active');
+        t.panel.style.display = 'flex';
+        activeTerminalId = id;
+
+        // Refit terminal
+        setTimeout(() => t.fitAddon.fit(), 50);
+    }
+
+    // ===== Terminal Removal =====
+    function removeTerminal(id) {
+        const t = terminals.get(id);
+        if (!t) return;
+
+        // Close WebSocket
+        if (t.ws) t.ws.close();
+
+        // For PTY terminals, delete from server
+        if (t.type === 'pty') {
+            deleteTerminal(id);
+        }
+
+        // Remove DOM elements
+        t.tabBtn.remove();
+        t.panel.remove();
+
+        // Dispose xterm
+        t.term.dispose();
+
+        terminals.delete(id);
+        delete reconnectAttempts[id];
+
+        // If we removed the active terminal, activate another
+        if (activeTerminalId === id) {
+            activeTerminalId = null;
+            const nextId = terminals.keys().next().value;
+            if (nextId) {
+                activateTerminal(nextId);
+            }
+        }
+
+        updateEmptyState();
+    }
+
+    function updateEmptyState() {
+        if (terminals.size === 0) {
+            els.emptyState.classList.remove('hidden');
+            els.tabs.style.display = 'none';
+            els.views.style.display = 'none';
+        } else {
+            els.emptyState.classList.add('hidden');
+            els.tabs.style.display = 'flex';
+            els.views.style.display = 'block';
+        }
+    }
+
+    // ===== API Calls =====
+    async function createNewTerminal() {
         try {
             const response = await fetch('/api/terminals/new', { method: 'POST' });
             const data = await response.json();
             if (data.id) {
-                currentTerminalId = data.id;
-                connectWebSocket(data.id);
-                updateTerminalList();
-                closeDrawer();
+                createTerminalElement(data.id, 'pty');
+                connectWebSocket(data.id, 'pty');
+                activateTerminal(data.id);
             }
         } catch (e) {
             console.error('Failed to create terminal:', e);
         }
     }
 
-    async function switchTerminal(terminalId) {
-        currentTerminalId = terminalId;
-        connectWebSocket(terminalId);
-        closeDrawer();
-        
-        // Clear terminal view
-        if (term) {
-            term.clear();
-        }
-    }
-
-    async function closeTerminal(terminalId, event) {
-        event.stopPropagation();
+    async function deleteTerminal(id) {
         try {
-            await fetch(`/api/terminals/${terminalId}`, { method: 'DELETE' });
-            terminals = terminals.filter(t => t.id !== terminalId);
-            
-            if (currentTerminalId === terminalId) {
-                if (terminals.length > 0) {
-                    switchTerminal(terminals[0].id);
-                } else {
-                    createTerminal();
-                }
-            }
-            updateTerminalList();
+            await fetch(`/api/terminals/${id}`, { method: 'DELETE' });
         } catch (e) {
-            console.error('Failed to close terminal:', e);
+            console.error('Failed to delete terminal:', e);
         }
     }
 
-    async function updateTerminalList() {
+    async function loadTmuxSessions() {
+        try {
+            const response = await fetch('/api/tmux/sessions');
+            if (!response.ok) {
+                tmuxAvailable = false;
+                return [];
+            }
+            const data = await response.json();
+            tmuxAvailable = true;
+            return data.panes || [];
+        } catch (e) {
+            tmuxAvailable = false;
+            return [];
+        }
+    }
+
+    async function loadExistingTerminals() {
         try {
             const response = await fetch('/api/terminals');
             const data = await response.json();
-            terminals = data.terminals || [];
-            renderTerminalList();
-        } catch (e) {
-            console.error('Failed to update terminal list:', e);
-        }
-    }
+            const serverTerminals = data.terminals || [];
 
-    function renderTerminalList() {
-        elements.terminalList.innerHTML = '';
-        
-        terminals.forEach(t => {
-            const item = document.createElement('div');
-            item.className = `terminal-item${t.id === currentTerminalId ? ' active' : ''}`;
-            item.innerHTML = `
-                <span class="term-id">${t.id.substring(0, 8)}...</span>
-                <span class="term-status${t.waiting_for_input ? ' waiting' : ''}">
-                    ${t.waiting_for_input ? '⏳ Waiting' : '● Active'}
-                </span>
-                <button class="close-btn" data-id="${t.id}">✕</button>
-            `;
-            
-            item.addEventListener('click', () => switchTerminal(t.id));
-            
-            const closeBtn = item.querySelector('.close-btn');
-            closeBtn.addEventListener('click', (e) => closeTerminal(t.id, e));
-            
-            elements.terminalList.appendChild(item);
-        });
-    }
+            // Also check for tmux sessions
+            const tmuxPanes = await loadTmuxSessions();
 
-    // ===== Drawer =====
-    function openDrawer() {
-        elements.drawer.classList.add('open');
-        elements.drawerOverlay.classList.add('active');
-        updateTerminalList();
-    }
+            let createdAny = false;
 
-    function closeDrawer() {
-        elements.drawer.classList.remove('open');
-        elements.drawerOverlay.classList.remove('active');
-    }
-
-    // ===== Preset Buttons =====
-    function setupPresetButtons() {
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = btn.dataset.input;
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(input);
+            // Create UI for tmux panes (mirrored sessions)
+            tmuxPanes.forEach(pane => {
+                const id = 'tmux-' + pane.pane_id.replace(/[^a-zA-Z0-9]/g, '_');
+                if (!terminals.has(id)) {
+                    createTerminalElement(id, 'tmux', pane);
+                    connectWebSocket(id, 'tmux', pane);
+                    createdAny = true;
                 }
             });
-        });
-    }
 
-    // ===== Custom Input =====
-    function setupCustomInput() {
-        elements.sendBtn.addEventListener('click', sendCustomCommand);
-        
-        elements.cmdInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                sendCustomCommand();
+            // Create UI for server terminals
+            serverTerminals.forEach(t => {
+                if (!terminals.has(t.id)) {
+                    createTerminalElement(t.id, 'pty');
+                    connectWebSocket(t.id, 'pty');
+                    createdAny = true;
+                }
+            });
+
+            // If nothing exists, create a new terminal or show tmux message
+            if (!createdAny) {
+                if (tmuxPanes.length === 0 && serverTerminals.length === 0) {
+                    // Show empty state with tmux hint
+                    updateEmptyState();
+                    if (tmuxAvailable) {
+                        // tmux is available but no sessions - create a new terminal
+                        createNewTerminal();
+                    } else {
+                        // No tmux, no terminals - create one
+                        createNewTerminal();
+                    }
+                    return;
+                }
             }
-        });
+
+            // Activate the first one
+            const firstId = terminals.keys().next().value;
+            if (firstId) {
+                activateTerminal(firstId);
+            }
+        } catch (e) {
+            console.error('Failed to load terminals:', e);
+            createNewTerminal();
+        }
     }
 
-    function sendCustomCommand() {
-        const cmd = elements.cmdInput.value;
-        if (!cmd) return;
-        
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(cmd + '\n');
+    // ===== Refresh =====
+    async function refreshTerminals() {
+        try {
+            const response = await fetch('/api/terminals');
+            const data = await response.json();
+            const serverTerminals = data.terminals || [];
+
+            // Check tmux sessions
+            const tmuxPanes = await loadTmuxSessions();
+            const tmuxIds = new Set(tmuxPanes.map(p => 'tmux-' + p.pane_id.replace(/[^a-zA-Z0-9]/g, '_')));
+            const serverIds = new Set(serverTerminals.map(t => t.id));
+
+            // Remove PTY terminals that no longer exist on server
+            const localIds = Array.from(terminals.keys());
+            localIds.forEach(id => {
+                const t = terminals.get(id);
+                if (t && t.type === 'pty' && !serverIds.has(id)) {
+                    removeTerminal(id);
+                }
+            });
+
+            // Add new PTY terminals from server
+            serverTerminals.forEach(t => {
+                if (!terminals.has(t.id)) {
+                    createTerminalElement(t.id, 'pty');
+                    connectWebSocket(t.id, 'pty');
+                }
+            });
+
+            // Update tmux panes - remove ones that disappeared, add new ones
+            tmuxPanes.forEach(pane => {
+                const id = 'tmux-' + pane.pane_id.replace(/[^a-zA-Z0-9]/g, '_');
+                if (!terminals.has(id)) {
+                    createTerminalElement(id, 'tmux', pane);
+                    connectWebSocket(id, 'tmux', pane);
+                }
+            });
+
+            // Ensure one is active
+            if (!activeTerminalId && terminals.size > 0) {
+                activateTerminal(terminals.keys().next().value);
+            }
+        } catch (e) {
+            console.error('Failed to refresh terminals:', e);
         }
-        
-        elements.cmdInput.value = '';
-        elements.cmdInput.blur();
     }
 
     // ===== Notifications =====
     function showNotification() {
-        elements.notificationBanner.classList.remove('hidden');
-        
-        // Vibrate if available
-        if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-        }
-        
-        // Request notification permission for push
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
+        els.notificationBanner.classList.remove('hidden');
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
 
     function hideNotification() {
-        elements.notificationBanner.classList.add('hidden');
+        els.notificationBanner.classList.add('hidden');
     }
 
-    // ===== Touch Gestures for Drawer =====
-    function setupTouchGestures() {
-        let startX = 0;
-        let currentX = 0;
-        let isDragging = false;
-
-        document.addEventListener('touchstart', (e) => {
-            startX = e.touches[0].clientX;
-            // Only allow swipe from right edge
-            if (startX > window.innerWidth - 30) {
-                isDragging = true;
-            }
+    // ===== Window Resize =====
+    window.addEventListener('resize', () => {
+        terminals.forEach(t => {
+            setTimeout(() => t.fitAddon.fit(), 100);
         });
-
-        document.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            currentX = e.touches[0].clientX;
-        });
-
-        document.addEventListener('touchend', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            
-            const diff = startX - currentX;
-            // Swipe left to open
-            if (diff > 50 && !elements.drawer.classList.contains('open')) {
-                openDrawer();
-            }
-            // Swipe right to close
-            if (diff < -50 && elements.drawer.classList.contains('open')) {
-                closeDrawer();
-            }
-        });
-    }
-
-    // ===== Keyboard Handling for Mobile =====
-    function setupKeyboardHandling() {
-        const textarea = term?.textarea;
-        if (textarea) {
-            textarea.addEventListener('focus', () => {
-                setTimeout(() => fitAddon.fit(), 300);
-            });
-            
-            textarea.addEventListener('blur', () => {
-                setTimeout(() => fitAddon.fit(), 100);
-            });
-        }
-    }
+    });
 
     // ===== Periodic Updates =====
     function startPeriodicUpdates() {
         setInterval(() => {
-            updateTerminalList();
-            
-            // Check if any terminal is waiting for input
-            const waitingTerminal = terminals.find(t => t.waiting_for_input);
-            if (waitingTerminal && waitingTerminal.id !== currentTerminalId) {
-                showNotification();
-            }
-        }, 5000);
+            refreshTerminals();
+        }, 10000);
     }
 
     // ===== Initialize =====
     function init() {
-        initTerminal();
-        setupPresetButtons();
-        setupCustomInput();
-        setupTouchGestures();
-        setupKeyboardHandling();
-        
         // Event listeners
-        elements.menuBtn.addEventListener('click', openDrawer);
-        elements.drawerClose.addEventListener('click', closeDrawer);
-        elements.drawerOverlay.addEventListener('click', closeDrawer);
-        elements.newTerminalBtn.addEventListener('click', createTerminal);
-        elements.dismissNotification.addEventListener('click', hideNotification);
-        
-        // Create initial terminal
-        createTerminal();
-        
+        els.newBtn.addEventListener('click', createNewTerminal);
+        els.emptyNewBtn.addEventListener('click', createNewTerminal);
+        els.refreshBtn.addEventListener('click', refreshTerminals);
+        els.dismissNotification.addEventListener('click', hideNotification);
+
+        // Load existing terminals from server (PTY + tmux)
+        loadExistingTerminals();
+
         // Start periodic updates
         startPeriodicUpdates();
-        
-        // Request notification permission
-        if ('Notification' in window && Notification.permission === 'default') {
-            // Will request on first waiting event
-        }
     }
 
-    // Start when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
