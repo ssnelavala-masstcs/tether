@@ -1,16 +1,14 @@
-// ===== Tether Frontend - Multi-Terminal + tmux Mirroring =====
+// ===== Tether Frontend - Terminal Mirroring =====
 (function() {
     'use strict';
 
-    // State
-    const terminals = new Map(); // terminalId -> { ws, term, fitAddon, el, type: 'pty'|'tmux' }
-    let activeTerminalId = null;
+    const terminals = new Map();
+    const mirrors = new Map();
+    let activeId = null;
     let reconnectAttempts = {};
-    const MAX_RECONNECT_ATTEMPTS = 10;
+    const MAX_RECONNECT = 10;
     const RECONNECT_DELAY = 2000;
-    let tmuxAvailable = false;
 
-    // DOM Elements
     const els = {
         header: document.getElementById('header'),
         tabs: document.getElementById('terminal-tabs'),
@@ -23,439 +21,237 @@
         dismissNotification: document.getElementById('dismiss-notification'),
     };
 
-    // ===== Terminal Management =====
-    function createTerminalElement(id, type = 'pty', tmuxPane = null) {
-        const label = type === 'tmux'
-            ? tmuxPane.session_name + ':' + tmuxPane.pane_index
-            : id.substring(0, 8);
-
-        // Create tab button
+    // ===== Create Terminal Panel =====
+    function createPanel(id, label, type) {
         const tabBtn = document.createElement('button');
         tabBtn.className = 'tab-btn';
         tabBtn.dataset.id = id;
         tabBtn.dataset.type = type;
-        tabBtn.innerHTML = `
-            <span class="tab-status"></span>
-            <span class="tab-label">${label}</span>
-            <span class="tab-close" data-id="${id}">✕</span>
-        `;
-        tabBtn.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('tab-close')) {
-                activateTerminal(id);
-            }
-        });
-        tabBtn.querySelector('.tab-close').addEventListener('click', (e) => {
-            e.stopPropagation();
-            removeTerminal(id);
-        });
+        tabBtn.innerHTML = `<span class="tab-status"></span><span class="tab-label">${label}</span><span class="tab-close" data-id="${id}">✕</span>`;
+        tabBtn.addEventListener('click', (e) => { if (!e.target.classList.contains('tab-close')) activatePanel(id); });
+        tabBtn.querySelector('.tab-close').addEventListener('click', (e) => { e.stopPropagation(); removePanel(id); });
         els.tabs.appendChild(tabBtn);
 
-        // Create terminal panel
         const panel = document.createElement('div');
         panel.className = 'terminal-panel';
         panel.dataset.id = id;
-        panel.dataset.type = type;
-        const headerLabel = type === 'tmux'
-            ? `tmux: ${tmuxPane.session_name}:${tmuxPane.pane_index}`
-            : `Terminal ${id.substring(0, 8)}`;
         panel.innerHTML = `
             <div class="terminal-panel-header">
-                <span class="panel-title">${headerLabel}</span>
+                <span class="panel-title">${label}</span>
                 <span class="panel-status">connecting...</span>
             </div>
-            <div class="xterm-wrapper">
-                <div class="xterm-container"></div>
-            </div>
-        `;
+            <div class="xterm-wrapper"><div class="xterm-container"></div></div>`;
         els.views.appendChild(panel);
 
-        // Create xterm instance
         const isMobile = window.innerWidth <= 480;
         const term = new Terminal({
-            cursorBlink: true,
-            fontSize: isMobile ? 11 : 13,
+            cursorBlink: true, fontSize: isMobile ? 11 : 13,
             fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace",
-            theme: {
-                background: '#000000',
-                foreground: '#ffffff',
-                cursor: '#00d4ff',
-                selectionBackground: '#00d4ff40',
-                black: '#000000',
-                red: '#e94560',
-                green: '#00ff88',
-                yellow: '#ffbd2e',
-                blue: '#00d4ff',
-                magenta: '#bd93f9',
-                cyan: '#8be9fd',
-                white: '#ffffff',
-            },
-            allowProposedApi: true,
-            scrollback: 10000,
+            theme: { background: '#000000', foreground: '#ffffff', cursor: '#00d4ff', selectionBackground: '#00d4ff40',
+                black: '#000000', red: '#e94560', green: '#00ff88', yellow: '#ffbd2e', blue: '#00d4ff', magenta: '#bd93f9', cyan: '#8be9fd', white: '#ffffff' },
+            allowProposedApi: true, scrollback: 10000,
         });
-
         const fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
+        try { const wg = new WebglAddon.WebglAddon(); term.loadAddon(wg); wg.onContextLoss(() => wg.dispose()); } catch(e) {}
+        term.open(panel.querySelector('.xterm-container'));
 
-        try {
-            const webglAddon = new WebglAddon.WebglAddon();
-            term.loadAddon(webglAddon);
-            webglAddon.onContextLoss(() => webglAddon.dispose());
-        } catch (e) {
-            // WebGL not available
-        }
-
-        const container = panel.querySelector('.xterm-container');
-        term.open(container);
-
-        // Handle terminal input
         term.onData(data => {
-            const t = terminals.get(id);
-            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) {
-                t.ws.send(data);
-            }
+            const t = terminals.get(id) || mirrors.get(id);
+            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) t.ws.send(data);
         });
-
-        // Handle resize
         term.onResize(size => {
-            const t = terminals.get(id);
-            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) {
-                t.ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
-            }
+            const t = terminals.get(id) || mirrors.get(id);
+            if (t && t.ws && t.ws.readyState === WebSocket.OPEN) t.ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
         });
+        setTimeout(() => { fitAddon.fit(); term.focus(); }, 100);
 
-        // Fit after a short delay
-        setTimeout(() => {
-            fitAddon.fit();
-            term.focus();
-        }, 100);
-
-        // Store terminal data
-        terminals.set(id, { ws: null, term, fitAddon, panel, tabBtn, type, tmuxPane });
+        const entry = { ws: null, term, fitAddon, panel, tabBtn, type };
+        if (type === 'mirror') mirrors.set(id, entry);
+        else terminals.set(id, entry);
         reconnectAttempts[id] = 0;
-
         updateEmptyState();
         return id;
     }
 
-    // ===== WebSocket Connection =====
-    function connectWebSocket(terminalId, type = 'pty', tmuxPane = null) {
-        const t = terminals.get(terminalId);
+    // ===== WebSocket =====
+    function connectWS(id, param, value) {
+        const t = terminals.get(id) || mirrors.get(id);
         if (!t) return;
-
-        // Close existing connection
-        if (t.ws) {
-            t.ws.close();
-        }
+        if (t.ws) t.ws.close();
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let url;
-        if (type === 'tmux' && tmuxPane) {
-            url = `${protocol}//${window.location.host}/ws?tmux_pane=${encodeURIComponent(tmuxPane.pane_id)}`;
-        } else {
-            url = `${protocol}//${window.location.host}/ws?terminal_id=${encodeURIComponent(terminalId)}`;
-        }
-
+        const url = `${protocol}//${window.location.host}/ws?${param}=${encodeURIComponent(value)}`;
         t.ws = new WebSocket(url);
 
-        t.ws.onopen = () => {
-            reconnectAttempts[terminalId] = 0;
-            updateTabStatus(terminalId, true);
-            updatePanelStatus(terminalId, true);
-        };
-
-        t.ws.onmessage = (event) => {
-            if (event.data && typeof event.data === 'string') {
-                t.term.write(event.data);
-            }
-        };
-
+        t.ws.onopen = () => { reconnectAttempts[id] = 0; updateStatus(id, true); };
+        t.ws.onmessage = (ev) => { if (ev.data && typeof ev.data === 'string') t.term.write(ev.data); };
         t.ws.onclose = () => {
-            updateTabStatus(terminalId, false);
-            updatePanelStatus(terminalId, false);
-
-            // Attempt reconnect
-            if (reconnectAttempts[terminalId] < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts[terminalId]++;
-                setTimeout(() => connectWebSocket(terminalId, type, tmuxPane), RECONNECT_DELAY);
+            updateStatus(id, false);
+            if (reconnectAttempts[id] < MAX_RECONNECT) {
+                reconnectAttempts[id]++;
+                setTimeout(() => connectWS(id, param, value), RECONNECT_DELAY);
             }
-        };
-
-        t.ws.onerror = () => {
-            updateTabStatus(terminalId, false);
         };
     }
 
-    function updateTabStatus(id, connected) {
-        const t = terminals.get(id);
+    function updateStatus(id, connected) {
+        const t = terminals.get(id) || mirrors.get(id);
         if (!t) return;
         const status = t.tabBtn.querySelector('.tab-status');
-        if (status) {
-            status.className = 'tab-status' + (connected ? '' : ' disconnected');
-        }
+        if (status) status.className = 'tab-status' + (connected ? '' : ' disconnected');
+        const ps = t.panel.querySelector('.panel-status');
+        if (ps) { ps.textContent = connected ? '● connected' : '○ disconnected'; ps.className = 'panel-status' + (connected ? ' connected' : ''); }
     }
 
-    function updatePanelStatus(id, connected) {
-        const t = terminals.get(id);
+    // ===== Panel Management =====
+    function activatePanel(id) {
+        terminals.forEach((t, tid) => { t.tabBtn.classList.remove('active'); t.panel.style.display = 'none'; });
+        mirrors.forEach((t, tid) => { t.tabBtn.classList.remove('active'); t.panel.style.display = 'none'; });
+        const t = terminals.get(id) || mirrors.get(id);
         if (!t) return;
-        const status = t.panel.querySelector('.panel-status');
-        if (status) {
-            status.textContent = connected ? '● connected' : '○ disconnected';
-            status.className = 'panel-status' + (connected ? ' connected' : '');
-        }
-    }
-
-    // ===== Terminal Activation =====
-    function activateTerminal(id) {
-        if (!terminals.has(id)) return;
-
-        // Deactivate all
-        terminals.forEach((t, tid) => {
-            t.tabBtn.classList.remove('active');
-            t.panel.style.display = 'none';
-        });
-
-        // Activate selected
-        const t = terminals.get(id);
         t.tabBtn.classList.add('active');
         t.panel.style.display = 'flex';
-        activeTerminalId = id;
-
-        // Refit terminal
+        activeId = id;
         setTimeout(() => t.fitAddon.fit(), 50);
     }
 
-    // ===== Terminal Removal =====
-    function removeTerminal(id) {
-        const t = terminals.get(id);
+    function removePanel(id) {
+        const t = terminals.get(id) || mirrors.get(id);
         if (!t) return;
-
-        // Close WebSocket
         if (t.ws) t.ws.close();
-
-        // For PTY terminals, delete from server
-        if (t.type === 'pty') {
-            deleteTerminal(id);
+        t.tabBtn.remove(); t.panel.remove(); t.term.dispose();
+        terminals.delete(id); mirrors.delete(id); delete reconnectAttempts[id];
+        if (activeId === id) {
+            activeId = null;
+            const next = terminals.keys().next().value || mirrors.keys().next().value;
+            if (next) activatePanel(next);
         }
-
-        // Remove DOM elements
-        t.tabBtn.remove();
-        t.panel.remove();
-
-        // Dispose xterm
-        t.term.dispose();
-
-        terminals.delete(id);
-        delete reconnectAttempts[id];
-
-        // If we removed the active terminal, activate another
-        if (activeTerminalId === id) {
-            activeTerminalId = null;
-            const nextId = terminals.keys().next().value;
-            if (nextId) {
-                activateTerminal(nextId);
-            }
-        }
-
         updateEmptyState();
     }
 
     function updateEmptyState() {
-        if (terminals.size === 0) {
-            els.emptyState.classList.remove('hidden');
-            els.tabs.style.display = 'none';
-            els.views.style.display = 'none';
-        } else {
-            els.emptyState.classList.add('hidden');
-            els.tabs.style.display = 'flex';
-            els.views.style.display = 'block';
-        }
+        const has = terminals.size > 0 || mirrors.size > 0;
+        els.emptyState.classList.toggle('hidden', has);
+        els.tabs.style.display = has ? 'flex' : 'none';
+        els.views.style.display = has ? 'block' : 'none';
     }
 
-    // ===== API Calls =====
+    // ===== Mirror Discovery & Setup =====
+    async function discoverMirrors() {
+        try {
+            const res = await fetch('/api/mirror/discover');
+            const data = await res.json();
+            return data.terminals || [];
+        } catch(e) { return []; }
+    }
+
+    async function setupAllMirrors() {
+        try {
+            const res = await fetch('/api/mirror/setup-all', { method: 'POST' });
+            const data = await res.json();
+            return data.results || [];
+        } catch(e) { return []; }
+    }
+
+    function showSetupUI(terminals) {
+        // Show a modal with setup commands for each terminal
+        const existing = document.getElementById('mirror-setup-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'mirror-setup-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        modal.innerHTML = `
+            <div style="background:#16213e;border-radius:12px;max-width:700px;width:100%;max-height:80vh;overflow-y:auto;padding:1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                    <h2 style="color:#00d4ff;margin:0;font-size:1.2rem;">🪢 Setup Terminal Mirrors</h2>
+                    <button id="close-setup" style="background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer;">✕</button>
+                </div>
+                <p style="color:#aaa;margin-bottom:1rem;font-size:0.85rem;">Run these commands in each terminal tab to enable mirroring:</p>
+                <div id="setup-commands"></div>
+                <button id="setup-all-btn" style="background:#00d4ff;color:#000;border:none;padding:0.75rem 1.5rem;border-radius:8px;font-weight:600;cursor:pointer;margin-top:1rem;width:100%;">
+                    Start All Mirrors
+                </button>
+            </div>`;
+        document.body.appendChild(modal);
+
+        const container = modal.querySelector('#setup-commands');
+        terminals.forEach(t => {
+            const div = document.createElement('div');
+            div.style.cssText = 'background:#0d1117;border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;';
+            div.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#00ff88;font-weight:600;">${t.id}</span>
+                    <span style="color:#888;font-size:0.75rem;">${t.pts_path} (PID ${t.pid})</span>
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                    <code style="flex:1;background:#161b22;padding:0.5rem;border-radius:4px;font-size:0.8rem;color:#fff;overflow-x:auto;white-space:nowrap;">${t.setup_command}</code>
+                    <button class="copy-cmd" data-cmd="${t.setup_command}" style="background:#238636;color:#fff;border:none;padding:0.5rem 0.75rem;border-radius:4px;cursor:pointer;font-size:0.75rem;white-space:nowrap;">Copy</button>
+                </div>`;
+            container.appendChild(div);
+        });
+
+        modal.querySelectorAll('.copy-cmd').forEach(btn => {
+            btn.addEventListener('click', () => {
+                navigator.clipboard.writeText(btn.dataset.cmd);
+                btn.textContent = '✓ Copied';
+                setTimeout(() => btn.textContent = 'Copy', 2000);
+            });
+        });
+
+        modal.querySelector('#close-setup').addEventListener('click', () => modal.remove());
+        modal.querySelector('#setup-all-btn').addEventListener('click', async () => {
+            const results = await setupAllMirrors();
+            modal.remove();
+            connectMirrors(results);
+        });
+    }
+
+    function connectMirrors(results) {
+        results.forEach(r => {
+            if (r.status === 'ok') {
+                const id = r.id;
+                if (!mirrors.has(id)) {
+                    createPanel(id, `Mirror: ${id}`, 'mirror');
+                    connectWS(id, 'mirror_id', id);
+                }
+            }
+        });
+        if (mirrors.size > 0) activatePanel(mirrors.keys().next().value);
+    }
+
+    // ===== New Terminal =====
     async function createNewTerminal() {
         try {
-            const response = await fetch('/api/terminals/new', { method: 'POST' });
-            const data = await response.json();
+            const res = await fetch('/api/terminals/new', { method: 'POST' });
+            const data = await res.json();
             if (data.id) {
-                createTerminalElement(data.id, 'pty');
-                connectWebSocket(data.id, 'pty');
-                activateTerminal(data.id);
+                createPanel(data.id, `Terminal ${data.id.substring(0,8)}`, 'pty');
+                connectWS(data.id, 'terminal_id', data.id);
+                activatePanel(data.id);
             }
-        } catch (e) {
-            console.error('Failed to create terminal:', e);
-        }
-    }
-
-    async function deleteTerminal(id) {
-        try {
-            await fetch(`/api/terminals/${id}`, { method: 'DELETE' });
-        } catch (e) {
-            console.error('Failed to delete terminal:', e);
-        }
-    }
-
-    async function loadTmuxSessions() {
-        try {
-            const response = await fetch('/api/tmux/sessions');
-            if (!response.ok) {
-                tmuxAvailable = false;
-                return [];
-            }
-            const data = await response.json();
-            tmuxAvailable = true;
-            return data.panes || [];
-        } catch (e) {
-            tmuxAvailable = false;
-            return [];
-        }
-    }
-
-    async function loadExistingTerminals() {
-        try {
-            const response = await fetch('/api/terminals');
-            const data = await response.json();
-            const serverTerminals = data.terminals || [];
-
-            // Also check for tmux sessions
-            const tmuxPanes = await loadTmuxSessions();
-
-            let createdAny = false;
-
-            // Create UI for tmux panes (mirrored sessions)
-            tmuxPanes.forEach(pane => {
-                const id = 'tmux-' + pane.pane_id.replace(/[^a-zA-Z0-9]/g, '_');
-                if (!terminals.has(id)) {
-                    createTerminalElement(id, 'tmux', pane);
-                    connectWebSocket(id, 'tmux', pane);
-                    createdAny = true;
-                }
-            });
-
-            // Create UI for server terminals
-            serverTerminals.forEach(t => {
-                if (!terminals.has(t.id)) {
-                    createTerminalElement(t.id, 'pty');
-                    connectWebSocket(t.id, 'pty');
-                    createdAny = true;
-                }
-            });
-
-            // If nothing exists, create a new terminal or show tmux message
-            if (!createdAny) {
-                if (tmuxPanes.length === 0 && serverTerminals.length === 0) {
-                    // Show empty state with tmux hint
-                    updateEmptyState();
-                    if (tmuxAvailable) {
-                        // tmux is available but no sessions - create a new terminal
-                        createNewTerminal();
-                    } else {
-                        // No tmux, no terminals - create one
-                        createNewTerminal();
-                    }
-                    return;
-                }
-            }
-
-            // Activate the first one
-            const firstId = terminals.keys().next().value;
-            if (firstId) {
-                activateTerminal(firstId);
-            }
-        } catch (e) {
-            console.error('Failed to load terminals:', e);
-            createNewTerminal();
-        }
+        } catch(e) { console.error('Failed to create terminal:', e); }
     }
 
     // ===== Refresh =====
     async function refreshTerminals() {
-        try {
-            const response = await fetch('/api/terminals');
-            const data = await response.json();
-            const serverTerminals = data.terminals || [];
-
-            // Check tmux sessions
-            const tmuxPanes = await loadTmuxSessions();
-            const tmuxIds = new Set(tmuxPanes.map(p => 'tmux-' + p.pane_id.replace(/[^a-zA-Z0-9]/g, '_')));
-            const serverIds = new Set(serverTerminals.map(t => t.id));
-
-            // Remove PTY terminals that no longer exist on server
-            const localIds = Array.from(terminals.keys());
-            localIds.forEach(id => {
-                const t = terminals.get(id);
-                if (t && t.type === 'pty' && !serverIds.has(id)) {
-                    removeTerminal(id);
-                }
-            });
-
-            // Add new PTY terminals from server
-            serverTerminals.forEach(t => {
-                if (!terminals.has(t.id)) {
-                    createTerminalElement(t.id, 'pty');
-                    connectWebSocket(t.id, 'pty');
-                }
-            });
-
-            // Update tmux panes - remove ones that disappeared, add new ones
-            tmuxPanes.forEach(pane => {
-                const id = 'tmux-' + pane.pane_id.replace(/[^a-zA-Z0-9]/g, '_');
-                if (!terminals.has(id)) {
-                    createTerminalElement(id, 'tmux', pane);
-                    connectWebSocket(id, 'tmux', pane);
-                }
-            });
-
-            // Ensure one is active
-            if (!activeTerminalId && terminals.size > 0) {
-                activateTerminal(terminals.keys().next().value);
-            }
-        } catch (e) {
-            console.error('Failed to refresh terminals:', e);
+        const discovered = await discoverMirrors();
+        if (discovered.length > 0 && mirrors.size === 0) {
+            showSetupUI(discovered);
         }
     }
 
-    // ===== Notifications =====
-    function showNotification() {
-        els.notificationBanner.classList.remove('hidden');
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    }
-
-    function hideNotification() {
-        els.notificationBanner.classList.add('hidden');
-    }
-
-    // ===== Window Resize =====
-    window.addEventListener('resize', () => {
-        terminals.forEach(t => {
-            setTimeout(() => t.fitAddon.fit(), 100);
-        });
-    });
-
-    // ===== Periodic Updates =====
-    function startPeriodicUpdates() {
-        setInterval(() => {
-            refreshTerminals();
-        }, 10000);
-    }
-
-    // ===== Initialize =====
+    // ===== Init =====
     function init() {
-        // Event listeners
         els.newBtn.addEventListener('click', createNewTerminal);
         els.emptyNewBtn.addEventListener('click', createNewTerminal);
         els.refreshBtn.addEventListener('click', refreshTerminals);
-        els.dismissNotification.addEventListener('click', hideNotification);
-
-        // Load existing terminals from server (PTY + tmux)
-        loadExistingTerminals();
-
-        // Start periodic updates
-        startPeriodicUpdates();
+        els.dismissNotification.addEventListener('click', () => els.notificationBanner.classList.add('hidden'));
+        refreshTerminals();
+        setInterval(refreshTerminals, 15000);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 })();

@@ -8,14 +8,12 @@ pub async fn handle_ws_connection(
     socket: WebSocket,
     state: AppState,
     terminal_id: Option<String>,
-    tmux_pane: Option<String>,
+    mirror_id: Option<String>,
 ) {
-    // Determine if this is a tmux pane or a regular terminal
-    if let Some(pane_id) = tmux_pane {
-        info!("WebSocket connected to tmux pane: {}", pane_id);
-        handle_tmux_pane_io(socket, state, pane_id).await;
+    if let Some(mid) = mirror_id {
+        info!("WebSocket connected to mirror: {}", mid);
+        handle_mirror_io(socket, state, mid).await;
     } else {
-        // Regular terminal path
         let terminal_id = match terminal_id {
             Some(id) => id,
             None => match state.pty_manager.spawn_terminal(None) {
@@ -41,54 +39,43 @@ pub async fn handle_ws_connection(
     }
 }
 
-async fn handle_tmux_pane_io(
+async fn handle_mirror_io(
     mut socket: WebSocket,
     state: AppState,
-    pane_id: String,
+    mirror_id: String,
 ) {
-    // Subscribe to tmux pane output
-    let mut rx = match state.tmux_manager.subscribe_pane(&pane_id) {
+    let mut rx = match state.terminal_mirror.subscribe(&mirror_id) {
         Ok(rx) => rx,
         Err(e) => {
-            error!("Failed to subscribe to tmux pane {}: {}", pane_id, e);
+            error!("Failed to subscribe to mirror {}: {}", mirror_id, e);
             return;
         }
     };
 
-    // Send initial capture of current pane content
-    if let Ok(content) = state.tmux_manager.capture_pane(&pane_id) {
-        if !content.is_empty() {
-            let _ = socket.send(Message::Text(content)).await;
-        }
-    }
-
-    // Main loop: tmux output -> WebSocket, WebSocket input -> tmux send-keys
     loop {
         tokio::select! {
-            // Send tmux pane output to WebSocket
             Some(output) = rx.recv() => {
                 if socket.send(Message::Text(output)).await.is_err() {
                     break;
                 }
             }
 
-            // Receive user input from WebSocket and send to tmux
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if state.tmux_manager.send_keys(&pane_id, &text).is_err() {
+                        if state.terminal_mirror.send_input(&mirror_id, &text).is_err() {
                             break;
                         }
                     }
                     Some(Ok(Message::Binary(data))) => {
                         if let Ok(text) = String::from_utf8(data) {
-                            if state.tmux_manager.send_keys(&pane_id, &text).is_err() {
+                            if state.terminal_mirror.send_input(&mirror_id, &text).is_err() {
                                 break;
                             }
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
-                        info!("WebSocket closed for tmux pane: {}", pane_id);
+                        info!("WebSocket closed for mirror: {}", mirror_id);
                         break;
                     }
                     Some(Err(e)) => {
@@ -105,8 +92,7 @@ async fn handle_tmux_pane_io(
         }
     }
 
-    // Cleanup: unsubscribe
-    info!("Disconnected from tmux pane: {}", pane_id);
+    info!("Disconnected from mirror: {}", mirror_id);
 }
 
 async fn handle_terminal_io(
@@ -115,10 +101,8 @@ async fn handle_terminal_io(
     terminal_id: String,
     pty_manager: std::sync::Arc<crate::pty_manager::PtyManager>,
 ) {
-    // Channel for PTY output -> WebSocket
     let (pty_tx, mut pty_rx) = tokio::sync::mpsc::channel::<String>(100);
 
-    // Spawn reader thread - reads from PTY
     let term_for_reader = terminal.clone();
     let pty_tx_clone = pty_tx.clone();
 
@@ -149,7 +133,6 @@ async fn handle_terminal_io(
                     }
                     Ok(n) => {
                         let output = String::from_utf8_lossy(&buffer[..n]).to_string();
-
                         if pty_tx_clone.blocking_send(output).is_err() {
                             break;
                         }
@@ -165,17 +148,14 @@ async fn handle_terminal_io(
         }
     });
 
-    // Main loop: handle both sending PTY output and receiving user input
     loop {
         tokio::select! {
-            // Send PTY output to WebSocket
             Some(output) = pty_rx.recv() => {
                 if socket.send(Message::Text(output)).await.is_err() {
                     break;
                 }
             }
 
-            // Receive user input from WebSocket
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
@@ -220,7 +200,6 @@ async fn handle_terminal_io(
         }
     }
 
-    // Cleanup: remove terminal after grace period
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
         pty_manager.remove_terminal(&terminal_id);

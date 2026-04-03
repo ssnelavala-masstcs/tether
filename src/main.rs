@@ -2,6 +2,7 @@ mod auth;
 mod pty_manager;
 mod server;
 mod state;
+mod terminal_mirror;
 mod tmux_manager;
 mod ws_handler;
 
