@@ -10,7 +10,7 @@ mod tests {
             .arg("--help")
             .output()
             .expect("Failed to execute tether binary");
-        
+
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("serve"));
@@ -24,7 +24,7 @@ mod tests {
             .arg("--help")
             .output()
             .expect("Failed to execute tether serve --help");
-        
+
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("-p, --password"));

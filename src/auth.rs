@@ -13,6 +13,7 @@ const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(600); // 10 minutes
 
 #[derive(Clone)]
 pub struct Session {
+    #[allow(dead_code)]
     pub token: String,
     pub created_at: Instant,
 }
@@ -43,7 +44,7 @@ impl AuthManager {
         let hash = argon2
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| format!("Failed to hash password: {}", e))?;
-        
+
         *self.password_hash.lock().unwrap() = Some(hash.to_string());
         Ok(())
     }
@@ -57,7 +58,7 @@ impl AuthManager {
         {
             let mut rate_limits = self.rate_limits.lock().unwrap();
             let now = Instant::now();
-            
+
             let limit = rate_limits.entry(ip.to_string()).or_insert(RateLimit {
                 attempts: 0,
                 window_start: now,
@@ -78,10 +79,10 @@ impl AuthManager {
         // Verify password
         let hash = self.password_hash.lock().unwrap();
         let hash_str = hash.as_ref().ok_or("No password set")?;
-        
-        let parsed_hash = PasswordHash::new(hash_str)
-            .map_err(|e| format!("Invalid password hash: {}", e))?;
-        
+
+        let parsed_hash =
+            PasswordHash::new(hash_str).map_err(|e| format!("Invalid password hash: {}", e))?;
+
         Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
             .map_err(|_| "Invalid password".to_string())?;
@@ -105,7 +106,7 @@ impl AuthManager {
 
     pub fn validate_session(&self, token: &str) -> bool {
         let mut sessions = self.sessions.lock().unwrap();
-        
+
         if let Some(session) = sessions.get(token) {
             if session.created_at.elapsed() < SESSION_DURATION {
                 return true;
@@ -115,12 +116,14 @@ impl AuthManager {
         false
     }
 
+    #[allow(dead_code)]
     pub fn cleanup_expired(&self) {
         let mut sessions = self.sessions.lock().unwrap();
         sessions.retain(|_, s| s.created_at.elapsed() < SESSION_DURATION);
     }
 
     /// Clean up expired rate limit entries for a given IP
+    #[allow(dead_code)]
     pub fn cleanup_rate_limits(&self, ip: &str) {
         let mut rate_limits = self.rate_limits.lock().unwrap();
         if let Some(limit) = rate_limits.get(ip) {

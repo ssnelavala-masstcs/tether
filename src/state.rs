@@ -1,5 +1,5 @@
-use crate::pty_manager::PtyManager;
 use crate::auth::AuthManager;
+use crate::pty_manager::PtyManager;
 use std::sync::Arc;
 
 #[derive(Clone)]

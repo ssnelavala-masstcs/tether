@@ -1,15 +1,15 @@
 use axum::{
     extract::{Query, Request, State},
-    http::{StatusCode, header},
+    http::{header, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Form,
 };
 use axum_extra::extract::CookieJar;
 use serde::Deserialize;
-use tracing::info;
 use std::net::SocketAddr;
+use tracing::info;
 
 use crate::state::AppState;
 use crate::ws_handler::handle_ws_connection;
@@ -29,7 +29,9 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
     let auth_manager = std::sync::Arc::new(crate::auth::AuthManager::new());
 
     if let Some(pwd) = password {
-        auth_manager.set_password(&pwd).expect("Failed to set password");
+        auth_manager
+            .set_password(&pwd)
+            .expect("Failed to set password");
         info!("Password authentication enabled");
     } else {
         info!("No password set - authentication disabled");
@@ -52,7 +54,10 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
         .route("/api/terminals", get(list_terminals))
         .route("/api/terminals/new", post(create_terminal))
         .route("/api/terminals/{id}", delete(delete_terminal))
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
 
@@ -72,22 +77,24 @@ pub async fn start_server(password: Option<String>, port: u16, allow_lan: bool) 
 
     info!("Server running at http://{}", addr);
 
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-        .expect("Server failed");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("Server failed");
 }
 
 /// Authentication middleware - checks session cookie on protected routes
-async fn auth_middleware(
-    State(state): State<AppState>,
-    request: Request,
-    next: Next,
-) -> Response {
+async fn auth_middleware(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
 
     // Skip auth for public routes
-    if path == "/auth" || path == "/login" || path == "/api/qr"
-        || path.starts_with("/css/") || path.starts_with("/js/")
+    if path == "/auth"
+        || path == "/login"
+        || path == "/api/qr"
+        || path.starts_with("/css/")
+        || path.starts_with("/js/")
         || path.starts_with("/assets/")
     {
         return next.run(request).await;
@@ -107,17 +114,15 @@ async fn auth_middleware(
 
     if !authenticated {
         // Redirect to login for HTML requests, return 401 for API
-        let accepts_html = request.headers()
+        let accepts_html = request
+            .headers()
             .get(header::ACCEPT)
             .and_then(|v| v.to_str().ok())
             .map(|v| v.contains("text/html"))
             .unwrap_or(false);
 
         if accepts_html || path == "/" {
-            return (
-                StatusCode::FOUND,
-                [(header::LOCATION, "/login")],
-            ).into_response();
+            return (StatusCode::FOUND, [(header::LOCATION, "/login")]).into_response();
         } else {
             return StatusCode::UNAUTHORIZED.into_response();
         }
@@ -138,9 +143,7 @@ async fn serve_login() -> Response {
 }
 
 /// Serve static files from embedded assets (fallback handler)
-async fn serve_static_fallback(
-    uri: axum::http::Uri,
-) -> impl IntoResponse {
+async fn serve_static_fallback(uri: axum::http::Uri) -> impl IntoResponse {
     let path = uri.path().trim_start_matches('/');
 
     if path.is_empty() {
@@ -153,11 +156,10 @@ async fn serve_static_fallback(
             (
                 [(header::CONTENT_TYPE, mime.as_ref().to_string())],
                 content.data.to_vec(),
-            ).into_response()
+            )
+                .into_response()
         }
-        None => {
-            StatusCode::NOT_FOUND.into_response()
-        }
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
@@ -173,7 +175,8 @@ async fn handle_auth(
 ) -> Response {
     // Use a default IP for rate limiting when behind a proxy
     // In production, the reverse proxy should set X-Forwarded-For
-    let ip = jar.get("X-Forwarded-For")
+    let ip = jar
+        .get("X-Forwarded-For")
         .map(|c| c.value().to_string())
         .unwrap_or_else(|| "127.0.0.1".to_string());
 
@@ -262,21 +265,21 @@ async fn delete_terminal(
     }
 }
 
-async fn generate_qr(Query(params): Query<std::collections::HashMap<String, String>>) -> impl IntoResponse {
+async fn generate_qr(
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
     let default_url = "http://localhost:8080".to_string();
     let url = params.get("url").unwrap_or(&default_url);
 
     let qr = qrcode::QrCode::new(url.as_bytes()).unwrap();
-    let svg = qr.render::<qrcode::render::svg::Color>()
+    let svg = qr
+        .render::<qrcode::render::svg::Color>()
         .min_dimensions(200, 200)
         .dark_color(qrcode::render::svg::Color("#000000"))
         .light_color(qrcode::render::svg::Color("#ffffff"))
         .build();
 
-    (
-        [(header::CONTENT_TYPE, "image/svg+xml")],
-        svg,
-    )
+    ([(header::CONTENT_TYPE, "image/svg+xml")], svg)
 }
 
 fn print_lan_info(port: u16) {
@@ -296,7 +299,8 @@ fn print_lan_info(port: u16) {
                     let mut line = String::new();
                     for x in 0..size {
                         let top = matches!(modules.get(y * size + x), Some(qrcode::Color::Dark));
-                        let bottom = matches!(modules.get((y + 1) * size + x), Some(qrcode::Color::Dark));
+                        let bottom =
+                            matches!(modules.get((y + 1) * size + x), Some(qrcode::Color::Dark));
                         match (top, bottom) {
                             (false, false) => line.push(' '),
                             (true, false) => line.push('▀'),

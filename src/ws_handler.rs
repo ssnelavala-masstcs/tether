@@ -1,26 +1,20 @@
 use axum::extract::ws::{Message, WebSocket};
-use tracing::{info, error, warn};
 use std::io::Write;
+use tracing::{error, info, warn};
 
 use crate::state::AppState;
 
-pub async fn handle_ws_connection(
-    socket: WebSocket,
-    state: AppState,
-    terminal_id: Option<String>,
-) {
+pub async fn handle_ws_connection(socket: WebSocket, state: AppState, terminal_id: Option<String>) {
     // Get or create terminal
     let terminal_id = match terminal_id {
         Some(id) => id,
-        None => {
-            match state.pty_manager.spawn_terminal(None) {
-                Ok(id) => id,
-                Err(e) => {
-                    error!("Failed to spawn terminal: {}", e);
-                    return;
-                }
+        None => match state.pty_manager.spawn_terminal(None) {
+            Ok(id) => id,
+            Err(e) => {
+                error!("Failed to spawn terminal: {}", e);
+                return;
             }
-        }
+        },
     };
 
     info!("WebSocket connected to terminal: {}", terminal_id);
@@ -50,30 +44,26 @@ async fn handle_terminal_io(
     // Spawn reader thread - reads from PTY
     let term_for_reader = terminal.clone();
     let pty_tx_clone = pty_tx.clone();
-    
+
     tokio::task::spawn_blocking(move || {
         let mut buffer = [0u8; 4096];
         loop {
             let reader = {
                 match term_for_reader.lock() {
-                    Ok(term) => {
-                        match term.pair.lock() {
-                            Ok(pair) => {
-                                match pair.try_clone_reader() {
-                                    Ok(r) => Some(r),
-                                    Err(e) => {
-                                        warn!("Failed to clone reader: {}", e);
-                                        None
-                                    }
-                                }
-                            },
-                            Err(_) => None,
-                        }
+                    Ok(term) => match term.pair.lock() {
+                        Ok(pair) => match pair.try_clone_reader() {
+                            Ok(r) => Some(r),
+                            Err(e) => {
+                                warn!("Failed to clone reader: {}", e);
+                                None
+                            }
+                        },
+                        Err(_) => None,
                     },
                     Err(_) => None,
                 }
             };
-            
+
             if let Some(mut reader) = reader {
                 match reader.read(&mut buffer) {
                     Ok(0) => {
@@ -82,7 +72,7 @@ async fn handle_terminal_io(
                     }
                     Ok(n) => {
                         let output = String::from_utf8_lossy(&buffer[..n]).to_string();
-                        
+
                         if pty_tx_clone.blocking_send(output).is_err() {
                             break;
                         }
@@ -103,11 +93,11 @@ async fn handle_terminal_io(
         tokio::select! {
             // Send PTY output to WebSocket
             Some(output) = pty_rx.recv() => {
-                if socket.send(Message::Text(output.into())).await.is_err() {
+                if socket.send(Message::Text(output)).await.is_err() {
                     break;
                 }
             }
-            
+
             // Receive user input from WebSocket
             msg = socket.recv() => {
                 match msg {

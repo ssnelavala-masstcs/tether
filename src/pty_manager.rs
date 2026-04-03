@@ -1,13 +1,15 @@
 use dashmap::DashMap;
+use portable_pty::{CommandBuilder, PtySize};
 use std::sync::Arc;
-use uuid::Uuid;
-use portable_pty::{PtySize, CommandBuilder};
 use std::sync::Mutex;
+use uuid::Uuid;
 
 pub struct TerminalSession {
+    #[allow(dead_code)]
     pub id: String,
     pub pair: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     pub child: Arc<Mutex<Box<dyn portable_pty::Child + Send>>>,
+    #[allow(dead_code)]
     pub last_activity: std::time::Instant,
     pub waiting_for_input: bool,
 }
@@ -28,7 +30,7 @@ impl PtyManager {
 
     pub fn spawn_terminal(&self, shell: Option<&str>) -> Result<String, String> {
         let pty_system = portable_pty::native_pty_system();
-        
+
         let size = PtySize {
             rows: 24,
             cols: 80,
@@ -42,14 +44,14 @@ impl PtyManager {
 
         let shell_cmd = shell.unwrap_or("bash");
         let cmd = CommandBuilder::new(shell_cmd);
-        
+
         let child = pair
             .slave
             .spawn_command(cmd)
             .map_err(|e| format!("Failed to spawn shell: {}", e))?;
 
         let id = Uuid::new_v4().to_string();
-        
+
         let session = TerminalSession {
             id: id.clone(),
             pair: Arc::new(Mutex::new(pair.master)),
@@ -58,7 +60,8 @@ impl PtyManager {
             waiting_for_input: false,
         };
 
-        self.terminals.insert(id.clone(), Arc::new(Mutex::new(session)));
+        self.terminals
+            .insert(id.clone(), Arc::new(Mutex::new(session)));
         Ok(id)
     }
 
@@ -79,6 +82,7 @@ impl PtyManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn resize_terminal(&self, id: &str, rows: u16, cols: u16) -> Result<(), String> {
         if let Some(session) = self.get_terminal(id) {
             if let Ok(term) = session.lock() {
@@ -88,7 +92,8 @@ impl PtyManager {
                         cols,
                         pixel_width: 0,
                         pixel_height: 0,
-                    }).map_err(|e| format!("Failed to resize: {}", e))?;
+                    })
+                    .map_err(|e| format!("Failed to resize: {}", e))?;
                 }
             }
             Ok(())

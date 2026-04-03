@@ -1,11 +1,10 @@
-mod server;
-mod pty_manager;
 mod auth;
-mod ws_handler;
+mod pty_manager;
+mod server;
 mod state;
+mod ws_handler;
 
 use clap::Parser;
-use tracing_subscriber;
 
 #[derive(Parser, Debug)]
 #[command(name = "tether")]
