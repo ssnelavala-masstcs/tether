@@ -4,10 +4,10 @@
 
 <div align="center">
 
-[![Build Status](https://github.com/stanley-sujith-nelavala/tether/actions/workflows/ci.yml/badge.svg)](https://github.com/stanley-sujith-nelavala/tether/actions/workflows/ci.yml)
+[![Build Status](https://github.com/ssnelavala-masstcs/tether/actions/workflows/ci.yml/badge.svg)](https://github.com/ssnelavala-masstcs/tether/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-blue.svg)](https://www.rust-lang.org)
-[![Release](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/stanley-sujith-nelavala/tether/releases)
+[![Release](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/ssnelavala-masstcs/tether/releases)
 
 </div>
 
@@ -46,7 +46,7 @@ Then open `http://<your-laptop-ip>:8080` on your phone.
 
 ```bash
 # Clone the repository
-git clone https://github.com/stanley-sujith-nelavala/tether.git
+git clone https://github.com/ssnelavala-masstcs/tether.git
 cd tether
 
 # Build (requires Rust 1.75+)
@@ -59,13 +59,13 @@ cargo build --release
 #### Using Cargo Install
 
 ```bash
-cargo install --git https://github.com/stanley-sujith-nelavala/tether.git
+cargo install --git https://github.com/ssnelavala-masstcs/tether.git
 tether serve --password "mypassword" --allow-lan
 ```
 
 #### Pre-built Binaries
 
-Download from [Releases](https://github.com/stanley-sujith-nelavala/tether/releases) for your platform.
+Download from [Releases](https://github.com/ssnelavala-masstcs/tether/releases) for your platform.
 
 ### Usage
 
@@ -216,7 +216,7 @@ tether/
 
 ```bash
 # Clone and enter
-git clone https://github.com/stanley-sujith-nelavala/tether.git
+git clone https://github.com/ssnelavala-masstcs/tether.git
 cd tether
 
 # Run in development mode (with logging)
@@ -276,8 +276,8 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 <div align="center">
   <p>Made with ❤️ for mobile sysadmins</p>
   <p>
-    <a href="https://github.com/stanley-sujith-nelavala/tether/issues">Report Bug</a>
+    <a href="https://github.com/ssnelavala-masstcs/tether/issues">Report Bug</a>
     ·
-    <a href="https://github.com/stanley-sujith-nelavala/tether/issues">Request Feature</a>
+    <a href="https://github.com/ssnelavala-masstcs/tether/issues">Request Feature</a>
   </p>
 </div>
