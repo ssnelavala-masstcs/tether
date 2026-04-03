@@ -106,12 +106,51 @@ impl TerminalMirror {
         let terminal = self.terminals.get(id)
             .ok_or_else(|| format!("Terminal {} not found", id))?;
         let fifo_path = terminal.value().fifo_path.clone();
+        let pts_path = terminal.value().pts_path.clone();
         let id_str = id.to_string();
-        info!("Found terminal {}, fifo_path={}", id, fifo_path);
+        info!("Found terminal {}, fifo_path={}, pts_path={}", id, fifo_path, pts_path);
 
         let _ = std::fs::remove_file(&fifo_path);
         let _ = Command::new("mkfifo").arg(&fifo_path).output();
         info!("Created FIFO at {}", fifo_path);
+
+        // Build the setup command that pipes terminal output to our FIFO
+        let setup_command = format!("exec > >(tee {} >&1) 2>&1\n", fifo_path);
+
+        // Automatically inject the setup command into the terminal
+        // We CAN write to /dev/pts/N even though we can't read from it
+        // Strategy: send Ctrl+C to get to a clean prompt, wait, then send the command
+        info!("Injecting setup command into {}...", pts_path);
+
+        // Step 1: Send Ctrl+C to interrupt any running command
+        let _ = std::fs::write(&pts_path, "\x03");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        // Step 2: Send Ctrl+L to clear screen and ensure we're at a prompt
+        let _ = std::fs::write(&pts_path, "\x0c");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        // Step 3: Send the setup command with a newline
+        std::fs::write(&pts_path, &setup_command)
+            .map_err(|e| format!("Failed to inject setup command into {}: {}", pts_path, e))?;
+        info!("Injected setup command into {}", pts_path);
+
+        // Step 4: Wait for the tee process to start
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // Step 5: Verify tee is running by checking for children
+        let tee_check = Command::new("sh")
+            .arg("-c")
+            .arg(&format!("ps --ppid {} -o pid,cmd= 2>/dev/null | grep tee | grep -v grep", terminal.value().pid))
+            .output();
+        if let Ok(output) = tee_check {
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            if output_str.contains("tee") {
+                info!("Verified: tee process running for {}", id_str);
+            } else {
+                warn!("WARNING: tee process not found for {} - command may not have executed", id_str);
+            }
+        }
 
         let mirror_state = Arc::new(Mutex::new(MirrorState { subscribers: Vec::new() }));
         let mirror_clone = mirror_state.clone();
@@ -163,7 +202,7 @@ impl TerminalMirror {
 
         info!("Inserting mirror state for {}", id_str);
         self.mirrors.insert(id_str.clone(), mirror_state);
-        
+
         info!("Started mirror for terminal {}", id);
         Ok(fifo_path)
     }
