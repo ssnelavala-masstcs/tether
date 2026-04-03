@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Tether - Terminal Controller</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- xterm.js from CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="header">
+            <button id="menu-btn" aria-label="Open console drawer">☰</button>
+            <h1>Tether</h1>
+            <div id="status-indicator" class="disconnected"></div>
+        </header>
+
+        <!-- Preset Buttons -->
+        <div id="preset-bar">
+            <button class="preset-btn" data-input="ls -la\n">1</button>
+            <button class="preset-btn" data-input="top -n 1\n">2</button>
+            <button class="preset-btn" data-input="df -h\n">3</button>
+            <button class="preset-btn" data-input="free -m\n">4</button>
+            <button class="preset-btn" data-input="\n">Enter</button>
+        </div>
+
+        <!-- Custom Input -->
+        <div id="custom-input">
+            <input type="text" id="cmd-input" placeholder="Type command..." autocomplete="off" autocapitalize="off" spellcheck="false">
+            <button id="send-btn">Send</button>
+        </div>
+
+        <!-- Terminal Container -->
+        <div id="terminal-container">
+            <div id="terminal"></div>
+        </div>
+
+        <!-- Console Drawer (Right Panel) -->
+        <div id="drawer-overlay"></div>
+        <aside id="drawer">
+            <div id="drawer-header">
+                <h2>Consoles</h2>
+                <button id="drawer-close">✕</button>
+            </div>
+            <button id="new-terminal-btn">+ New Terminal</button>
+            <div id="terminal-list"></div>
+        </aside>
+
+        <!-- Notification Banner -->
+        <div id="notification-banner" class="hidden">
+            <span>Terminal is waiting for input</span>
+            <button id="dismiss-notification">Dismiss</button>
+        </div>
+    </div>
+
+    <!-- xterm.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18.0/lib/addon-webgl.min.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

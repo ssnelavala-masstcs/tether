@@ -1,0 +1,72 @@
+[package]
+name = "tether"
+version = "1.0.0"
+edition = "2021"
+description = "Remote Terminal Controller - Local Web Server + WebSocket PTY Bridge"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP/WS server
+axum = { version = "0.7", features = ["ws", "macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "trace"] }
+
+# PTY management
+portable-pty = "0.8"
+
+# WebSocket handling
+tokio-tungstenite = "0.21"
+
+# Auth
+argon2 = { version = "0.5", features = ["std"] }
+rand = "0.8"
+secrecy = "0.8"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Embedding frontend assets
+rust-embed = "8"
+
+# Time
+chrono = "0.4"
+
+# QR code generation
+qrcode = { version = "0.14", features = ["svg", "image"] }
+
+# Terminal size
+terminal_size = "0.3"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Dashes for multipart
+dashmap = "5"
+
+# URL encoding
+urlencoding = "2"
+
+# CLI parsing
+clap = { version = "4", features = ["derive"] }
+
+# Network interfaces
+get_if_addrs = "0.5"
+
+# Cookie handling
+axum-extra = { version = "0.9", features = ["cookie"] }
+
+# Stream utilities
+futures-util = "0.3"
+
+# MIME type detection
+mime_guess = "2"
+
+[features]
+default = []

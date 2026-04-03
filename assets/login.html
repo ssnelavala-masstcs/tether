@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a1a">
+    <title>Tether — Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            color: #f0f0ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0,212,255,0.1) 0%, transparent 70%);
+            top: -100px;
+            right: -100px;
+            border-radius: 50%;
+        }
+        body::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(124,58,237,0.1) 0%, transparent 70%);
+            bottom: -50px;
+            left: -50px;
+            border-radius: 50%;
+        }
+        .login-container {
+            background: rgba(20, 20, 50, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            position: relative;
+            z-index: 1;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        p {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #8888aa;
+            font-size: 0.9rem;
+        }
+        form { display: flex; flex-direction: column; gap: 1rem; }
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        input[type="password"] {
+            background: rgba(15, 52, 96, 0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            color: #f0f0ff;
+            font-size: 1rem;
+            min-height: 48px;
+            transition: border-color 0.2s;
+        }
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+        }
+        input[type="password"]::placeholder {
+            color: #555577;
+        }
+        button[type="submit"] {
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            min-height: 48px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button[type="submit"]:active {
+            transform: scale(0.98);
+        }
+        button[type="submit"]:hover {
+            box-shadow: 0 0 20px rgba(0,212,255,0.2);
+        }
+        .footer-text {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: #555577;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🪢</div>
+        <h1>Tether</h1>
+        <p>Enter your password to access the terminal</p>
+        <form action="/auth" method="POST">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Enter password" autofocus>
+            <button type="submit">Unlock Terminal</button>
+        </form>
+        <div class="footer-text">Self-hosted · Encrypted · No cloud</div>
+    </div>
+</body>
+</html>

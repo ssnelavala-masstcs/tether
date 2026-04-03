@@ -1,0 +1,23 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+nohup.out
+
+# Config
+config.toml
+
+# OS
+Thumbs.db

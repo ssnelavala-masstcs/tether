@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started — Tether Docs</title>
+    <meta name="description" content="Learn how to install, configure, and run Tether on your machine.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/docs.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">🪢</span>
+                <span class="logo-text">Tether</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="getting-started.html" class="active">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="security.html">Security</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/stanley-sujith-nelavala/tether" class="nav-cta" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="doc-page">
+        <h1>Getting Started</h1>
+        <p class="lead">Get Tether up and running in under a minute. This guide covers installation, basic usage, and accessing your terminal from a mobile device.</p>
+
+        <h2>Prerequisites</h2>
+        <ul>
+            <li><strong>Rust 1.75+</strong> — Install via <a href="https://rustup.rs/" target="_blank">rustup.rs</a></li>
+            <li><strong>Linux or macOS</strong> — Windows support is experimental</li>
+            <li><strong>A shell</strong> — bash, zsh, or any POSIX-compatible shell</li>
+            <li><strong>A phone on the same WiFi</strong> — For mobile access</li>
+        </ul>
+
+        <h2>Installation</h2>
+
+        <h3>Option 1: From Source (Recommended)</h3>
+        <div class="code-block">
+            <code>git clone https://github.com/stanley-sujith-nelavala/tether.git
+cd tether
+cargo build --release</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h3>Option 2: Cargo Install</h3>
+        <div class="code-block">
+            <code>cargo install --git https://github.com/stanley-sujith-nelavala/tether.git</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h3>Option 3: Pre-built Binaries</h3>
+        <p>Download compiled binaries from the <a href="https://github.com/stanley-sujith-nelavala/tether/releases" target="_blank">Releases page</a>.</p>
+
+        <h2>Basic Usage</h2>
+
+        <h3>Start the Server</h3>
+        <div class="code-block">
+            <code># Basic usage (localhost only)
+./target/release/tether serve --password "mypassword" --allow-lan
+
+# Custom port
+./target/release/tether serve --password "mypassword" --port 3000 --allow-lan</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h3>What Happens Next</h3>
+        <p>When you start Tether, you'll see output like this:</p>
+        <div class="code-block">
+            <code>INFO  Tether server starting
+INFO  Binding to 0.0.0.0:8080
+INFO  LAN IP: 192.168.1.100
+INFO  Access Tether at: http://192.168.1.100:8080
+INFO  QR Code: [QR code displayed in terminal]</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h2>Accessing from Your Phone</h2>
+        <ol>
+            <li><strong>Open the URL</strong> printed in the server output on your phone's browser</li>
+            <li><strong>Enter the password</strong> you set with <code class="inline">--password</code></li>
+            <li><strong>Tap "New Terminal"</strong> to spawn your first shell</li>
+            <li><strong>Start typing</strong> — your laptop's terminal is now in your hand</li>
+        </ol>
+
+        <div class="callout">
+            <strong>💡 Tip:</strong> You can also scan the QR code printed in the server's terminal output to instantly open the URL on your phone.
+        </div>
+
+        <h2>CLI Reference</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Flag</th>
+                    <th>Description</th>
+                    <th>Default</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code class="inline">-p, --password</code></td>
+                    <td>Password for authentication</td>
+                    <td><em>required</em></td>
+                </tr>
+                <tr>
+                    <td><code class="inline">-P, --port</code></td>
+                    <td>Port to bind to</td>
+                    <td><code class="inline">8080</code></td>
+                </tr>
+                <tr>
+                    <td><code class="inline">--allow-lan</code></td>
+                    <td>Allow LAN access (binds to 0.0.0.0)</td>
+                    <td><code class="inline">false</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Next Steps</h2>
+        <ul>
+            <li><a href="architecture.html">Architecture</a> — Learn how Tether works under the hood</li>
+            <li><a href="security.html">Security</a> — Understand the security model and best practices</li>
+            <li><a href="faq.html">FAQ</a> — Common questions and troubleshooting</li>
+        </ul>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>MIT License · Built with ❤️ and Rust</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/docs.js"></script>
+</body>
+</html>

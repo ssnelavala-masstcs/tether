@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security — Tether Docs</title>
+    <meta name="description" content="Understand Tether's security model, threat model, and best practices.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/docs.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="logo-icon">🪢</span>
+                <span class="logo-text">Tether</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="../index.html">Home</a></li>
+                <li><a href="../getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="security.html" class="active">Security</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/stanley-sujith-nelavala/tether" class="nav-cta" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="doc-page">
+        <h1>Security</h1>
+        <p class="lead">Tether is designed for trusted LAN environments. This page documents the security model, threat model, and best practices for safe deployment.</p>
+
+        <div class="callout warning">
+            <strong>⚠️ Important:</strong> Tether is NOT designed for public internet exposure. Always place it behind a reverse proxy with TLS if you need remote access.
+        </div>
+
+        <h2>Security Layers</h2>
+
+        <h3>1. Authentication</h3>
+        <table>
+            <thead>
+                <tr><th>Aspect</th><th>Implementation</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Algorithm</strong></td><td>Argon2id (memory-hard, PHC winner)</td></tr>
+                <tr><td><strong>Salt</strong></td><td>16-byte random salt per hash</td></tr>
+                <tr><td><strong>Memory Cost</strong></td><td>19,456 KiB (default Argon2id)</td></tr>
+                <tr><td><strong>Iterations</strong></td><td>2 passes</td></tr>
+                <tr><td><strong>Parallelism</strong></td><td>1 thread</td></tr>
+                <tr><td><strong>Hash Length</strong></td><td>32 bytes</td></tr>
+            </tbody>
+        </table>
+
+        <h3>2. Session Management</h3>
+        <table>
+            <thead>
+                <tr><th>Aspect</th><th>Implementation</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Token Format</strong></td><td>UUID v4 (128-bit random)</td></tr>
+                <tr><td><strong>Expiry</strong></td><td>7 days from creation</td></tr>
+                <tr><td><strong>Cookie Flags</strong></td><td>HttpOnly, SameSite=Strict, Path=/</td></tr>
+                <tr><td><strong>Storage</strong></td><td>In-memory HashMap (no disk persistence)</td></tr>
+            </tbody>
+        </table>
+
+        <h3>3. Rate Limiting</h3>
+        <table>
+            <thead>
+                <tr><th>Aspect</th><th>Implementation</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Window</strong></td><td>10 minutes</td></tr>
+                <tr><td><strong>Max Attempts</strong></td><td>5 per window per IP</td></tr>
+                <tr><td><strong>Lockout</strong></td><td>Blocks further attempts until window expires</td></tr>
+                <tr><td><strong>Storage</strong></td><td>In-memory HashMap with timestamp tracking</td></tr>
+            </tbody>
+        </table>
+
+        <h3>4. Network Security</h3>
+        <table>
+            <thead>
+                <tr><th>Aspect</th><th>Default</th><th>With --allow-lan</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Bind Address</strong></td><td>127.0.0.1 (localhost)</td><td>0.0.0.0 (all interfaces)</td></tr>
+                <tr><td><strong>Port</strong></td><td>8080</td><td>8080 (configurable)</td></tr>
+                <tr><td><strong>TLS</strong></td><td>Not enabled</td><td>Not enabled</td></tr>
+            </tbody>
+        </table>
+
+        <h2>Threat Model</h2>
+
+        <h3>Threats Mitigated</h3>
+        <ul>
+            <li><strong>Brute Force Attacks</strong> — Argon2id's memory hardness makes GPU/ASIC attacks expensive</li>
+            <li><strong>Password Guessing</strong> — Rate limiting prevents automated dictionary attacks</li>
+            <li><strong>Session Hijacking</strong> — HttpOnly cookies prevent XSS-based token theft</li>
+            <li><strong>CSRF</strong> — SameSite=Strict prevents cross-site request forgery</li>
+            <li><strong>Accidental Exposure</strong> — Default localhost binding prevents unintentional LAN exposure</li>
+        </ul>
+
+        <h3>Threats NOT Mitigated</h3>
+        <ul>
+            <li><strong>Network Eavesdropping</strong> — No TLS; LAN traffic is unencrypted</li>
+            <li><strong>Malicious LAN Actors</strong> — MITM attacks possible on untrusted networks</li>
+            <li><strong>Shell Escape Attacks</strong> — User's shell inherits their user permissions</li>
+            <li><strong>Denial of Service</strong> — No connection limits or resource quotas</li>
+        </ul>
+
+        <div class="callout danger">
+            <strong>🚨 Critical:</strong> Never expose Tether directly to the internet. It is designed for trusted LAN environments only.
+        </div>
+
+        <h2>Best Practices</h2>
+
+        <h3>Do</h3>
+        <ul>
+            <li>✅ Use a strong, unique password (12+ characters, mixed case, numbers, symbols)</li>
+            <li>✅ Only enable <code class="inline">--allow-lan</code> on trusted networks</li>
+            <li>✅ Use a firewall to restrict access to the Tether port</li>
+            <li>✅ Place behind a reverse proxy (nginx, caddy) with TLS for remote access</li>
+            <li>✅ Monitor server logs for suspicious activity</li>
+        </ul>
+
+        <h3>Don't</h3>
+        <ul>
+            <li>❌ Use weak or common passwords</li>
+            <li>❌ Expose Tether directly to the internet</li>
+            <li>❌ Run Tether as root (use your regular user account)</li>
+            <li>❌ Leave Tether running on public WiFi</li>
+            <li>❌ Share your password or session cookie</li>
+        </ul>
+
+        <h2>Production Deployment</h2>
+        <p>For production or remote access, use a reverse proxy with TLS:</p>
+
+        <div class="code-block">
+            <code># Example: nginx with Let's Encrypt
+server {
+    listen 443 ssl;
+    server_name tether.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/tether.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tether.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h2>Security Audit Checklist</h2>
+        <ul>
+            <li><input type="checkbox"> Password is 12+ characters, unique</li>
+            <li><input type="checkbox"> <code class="inline">--allow-lan</code> only on trusted networks</li>
+            <li><input type="checkbox"> Firewall rules restrict access to known IPs</li>
+            <li><input type="checkbox"> Not running as root</li>
+            <li><input type="checkbox"> TLS enabled if accessible outside LAN</li>
+            <li><input type="checkbox"> Logs monitored for suspicious activity</li>
+        </ul>
+
+        <h2>Reporting Vulnerabilities</h2>
+        <p>If you discover a security vulnerability, please report it via <a href="https://github.com/stanley-sujith-nelavala/tether/security/advisories" target="_blank">GitHub Security Advisories</a>. Do not open a public issue.</p>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>MIT License · Built with ❤️ and Rust</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/docs.js"></script>
+</body>
+</html>

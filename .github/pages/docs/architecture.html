@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture — Tether Docs</title>
+    <meta name="description" content="Deep dive into Tether's architecture, components, and data flow.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/docs.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="logo-icon">🪢</span>
+                <span class="logo-text">Tether</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="../index.html">Home</a></li>
+                <li><a href="../getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html" class="active">Architecture</a></li>
+                <li><a href="security.html">Security</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/stanley-sujith-nelavala/tether" class="nav-cta" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="doc-page">
+        <h1>Architecture</h1>
+        <p class="lead">Tether is built on Rust with a modular architecture. Each component is designed to be independently testable while working seamlessly together.</p>
+
+        <h2>System Overview</h2>
+        <div class="code-block">
+            <code>┌─────────────────────────────────────────────────────────┐
+│                      Your Laptop                         │
+│                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌────────────┐ │
+│  │   Axum HTTP  │◄──►│   PTY Mgr    │◄──►│  bash/sh   │ │
+│  │   + WS Srv   │    │ (portable-pty)│    │  sessions  │ │
+│  └──────┬───────┘    └──────────────┘    └────────────┘ │
+│         │                                                 │
+│         │ WebSocket (real-time I/O)                       │
+│         ▼                                                 │
+│  ┌──────────────┐                                        │
+│  │   Auth Mgr   │  Argon2id + Session Cookies            │
+│  │   (argon2)   │  Rate limiting: 5 attempts / 10 min    │
+│  └──────────────┘                                        │
+└─────────────────────────┬───────────────────────────────┘
+                          │ LAN (WiFi)
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│              Mobile Web Browser (xterm.js)               │
+└─────────────────────────────────────────────────────────┘</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h2>Core Components</h2>
+
+        <h3>1. HTTP/WS Server (server.rs)</h3>
+        <p>Built on <strong>Axum</strong>, the server handles:</p>
+        <ul>
+            <li><strong>Static assets</strong> — Frontend files embedded via <code class="inline">rust-embed</code></li>
+            <li><strong>REST API</strong> — Terminal CRUD operations, auth endpoints</li>
+            <li><strong>WebSocket upgrade</strong> — Real-time terminal I/O streaming</li>
+            <li><strong>QR code generation</strong> — LAN access URL as scannable QR</li>
+        </ul>
+
+        <h3>2. PTY Manager (pty_manager.rs)</h3>
+        <p>Uses <strong>portable-pty</strong> to manage pseudo-terminal sessions:</p>
+        <ul>
+            <li><strong>Spawn</strong> — Creates new PTY with shell process</li>
+            <li><strong>Resize</strong> — Adjusts terminal dimensions on window resize</li>
+            <li><strong>Write</strong> — Sends input to the shell</li>
+            <li><strong>Read</strong> — Reads output from the shell</li>
+            <li><strong>Kill</strong> — Gracefully terminates sessions</li>
+        </ul>
+
+        <h3>3. Auth Manager (auth.rs)</h3>
+        <p>Implements secure authentication with:</p>
+        <ul>
+            <li><strong>Argon2id</strong> — Memory-hard password hashing (PHC winner)</li>
+            <li><strong>Session cookies</strong> — UUID-based sessions with 7-day expiry</li>
+            <li><strong>Rate limiting</strong> — 5 failed attempts per 10-minute window per IP</li>
+        </ul>
+
+        <h3>4. WebSocket Handler (ws_handler.rs)</h3>
+        <p>Bridges WebSocket connections to PTY sessions:</p>
+        <ul>
+            <li><strong>Input direction</strong> — WS message → PTY writer</li>
+            <li><strong>Output direction</strong> — PTY reader → WS message</li>
+            <li><strong>Resize events</strong> — Frontend resize → PTY resize</li>
+            <li><strong>Disconnect handling</strong> — Graceful cleanup on WS close</li>
+        </ul>
+
+        <h3>5. Application State (state.rs)</h3>
+        <p>Shared state passed through Axum's dependency injection:</p>
+        <ul>
+            <li><strong>AppState</strong> — Holds Arc references to all managers</li>
+            <li><strong>Clone derive</strong> — Required for Axum's extractor pattern</li>
+        </ul>
+
+        <h2>Data Flow</h2>
+
+        <h3>Terminal Input (Phone → Laptop)</h3>
+        <div class="code-block">
+            <code>User types on phone
+  → xterm.js captures keystroke
+    → Frontend sends WS text message
+      → ws_handler receives message
+        → PTY manager writes to pty writer
+          → Shell process receives input</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h3>Terminal Output (Laptop → Phone)</h3>
+        <div class="code-block">
+            <code>Shell produces output
+  → PTY reader receives bytes
+    → ws_handler reads from PTY
+      → Sends WS binary message
+        → Frontend receives message
+          → xterm.js renders output</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <h2>Frontend Architecture</h2>
+
+        <h3>Key Technologies</h3>
+        <table>
+            <thead>
+                <tr><th>Technology</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>xterm.js</strong></td><td>Terminal emulation and rendering</td></tr>
+                <tr><td><strong>FitAddon</strong></td><td>Auto-size terminal to container</td></tr>
+                <tr><td><strong>WebGLAddon</strong></td><td>GPU-accelerated rendering</td></tr>
+                <tr><td><strong>Vanilla JS</strong></td><td>No framework overhead, fast load</td></tr>
+                <tr><td><strong>CSS Grid/Flex</strong></td><td>Responsive mobile-first layout</td></tr>
+            </tbody>
+        </table>
+
+        <h3>UI Components</h3>
+        <ul>
+            <li><strong>Terminal View</strong> — Full-screen xterm.js container</li>
+            <li><strong>Preset Bar</strong> — Quick-tap command buttons</li>
+            <li><strong>Console Drawer</strong> — Swipeable panel for terminal management</li>
+            <li><strong>Custom Input</strong> — Text field for arbitrary commands</li>
+            <li><strong>Notification Toast</strong> — Input-wait alerts</li>
+        </ul>
+
+        <h2>Project Structure</h2>
+        <div class="code-block">
+            <code>tether/
+├── Cargo.toml              # Rust dependencies
+├── src/
+│   ├── main.rs             # CLI entry point (clap)
+│   ├── server.rs           # Axum HTTP server + routing
+│   ├── pty_manager.rs      # PTY lifecycle management
+│   ├── auth.rs             # Argon2 auth + session management
+│   ├── ws_handler.rs       # WebSocket ↔ PTY bridge
+│   └── state.rs            # Shared application state
+├── assets/
+│   ├── index.html          # Main dashboard
+│   ├── login.html          # Password gate
+│   ├── css/style.css       # Mobile-first styles
+│   └── js/app.js           # Frontend logic
+└── .github/
+    ├── workflows/          # CI/CD pipelines
+    └── pages/              # GitHub Pages docs site</code>
+            <button class="copy-btn" onclick="copyCode(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+        </div>
+
+        <div class="callout">
+            <strong>📖 Want to dive deeper?</strong> Check out the <a href="https://github.com/stanley-sujith-nelavala/tether" target="_blank">source code on GitHub</a> to explore the implementation details.
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>MIT License · Built with ❤️ and Rust</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/docs.js"></script>
+</body>
+</html>

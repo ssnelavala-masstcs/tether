@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tether — Your Terminal, Anywhere</title>
+    <meta name="description" content="A lightweight, mobile-optimized web terminal controller. Mirror and control local shell sessions from your phone.">
+    <meta name="theme-color" content="#0a0a1a">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/docs.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">🪢</span>
+                <span class="logo-text">Tether</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="security.html">Security</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="https://github.com/stanley-sujith-nelavala/tether" class="nav-cta" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-bg">
+            <div class="gradient-orb orb-1"></div>
+            <div class="gradient-orb orb-2"></div>
+            <div class="gradient-orb orb-3"></div>
+            <div class="grid-overlay"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="badge-dot"></span>
+                <span>v1.0 — Now Available</span>
+            </div>
+            <h1 class="hero-title">
+                Your Terminal,<br>
+                <span class="gradient-text">Anywhere.</span>
+            </h1>
+            <p class="hero-subtitle">
+                A lightweight, mobile-optimized web terminal controller that mirrors and controls 
+                local shell sessions from your phone — zero cloud dependencies, fully self-hosted.
+            </p>
+            <div class="hero-actions">
+                <a href="getting-started.html" class="btn btn-primary">
+                    Get Started
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="https://github.com/stanley-sujith-nelavala/tether" class="btn btn-secondary" target="_blank">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    View on GitHub
+                </a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-value">≤150ms</span>
+                    <span class="stat-label">Input→Output Latency</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">≤40MB</span>
+                    <span class="stat-label">Memory (5 shells)</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label">Cloud Dependencies</span>
+                </div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="mock-terminal">
+                        <div class="mock-header">
+                            <span class="mock-dot red"></span>
+                            <span class="mock-dot yellow"></span>
+                            <span class="mock-dot green"></span>
+                            <span class="mock-title">tether — bash</span>
+                        </div>
+                        <div class="mock-body">
+                            <div class="mock-line"><span class="mock-prompt">$</span> <span class="mock-cmd">ls -la</span></div>
+                            <div class="mock-line mock-output">total 48</div>
+                            <div class="mock-line mock-output">drwxr-xr-x  8 user  4096 Apr  3</div>
+                            <div class="mock-line mock-output">-rw-r--r--  1 user  1234 Apr  3</div>
+                            <div class="mock-line"><span class="mock-prompt">$</span> <span class="mock-cursor">█</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Grid -->
+    <section class="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Features</span>
+                <h2 class="section-title">Everything you need for<br><span class="gradient-text">mobile terminal control</span></h2>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Mobile-First UI</h3>
+                    <p>Touch-optimized, responsive xterm.js interface designed specifically for phones and tablets.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3>Password Auth</h3>
+                    <p>Argon2id hashed passwords with session cookies, rate limiting, and 7-day expiry.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖥️</div>
+                    <h3>Multi-PTY</h3>
+                    <p>Spawn and manage multiple terminal sessions simultaneously with a swipeable drawer.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Real-Time</h3>
+                    <p>WebSocket-based streaming with ≤150ms input→output latency on your LAN.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎛️</div>
+                    <h3>Preset Commands</h3>
+                    <p>Quick-tap buttons for common commands — ls, top, df, free — one tap away.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📦</div>
+                    <h3>Single Binary</h3>
+                    <p>Frontend embedded via rust-embed. No npm, no external dependencies, just run.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="quick-start">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Quick Start</span>
+                <h2 class="section-title">Up and running in <span class="gradient-text">30 seconds</span></h2>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Install</h3>
+                        <div class="code-block">
+                            <code>git clone https://github.com/stanley-sujith-nelavala/tether.git
+cd tether
+cargo build --release</code>
+                            <button class="copy-btn" onclick="copyCode(this)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Run</h3>
+                        <div class="code-block">
+                            <code>./target/release/tether serve --password "secret" --allow-lan</code>
+                            <button class="copy-btn" onclick="copyCode(this)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Access from Phone</h3>
+                        <p>Open the printed URL (e.g., <code class="inline">http://192.168.1.100:8080</code>) on your phone's browser, enter the password, and start controlling your terminal.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="cta-center">
+                <a href="getting-started.html" class="btn btn-primary btn-lg">
+                    Full Documentation
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-icon">🪢</span>
+                    <span class="logo-text">Tether</span>
+                    <p>Your terminal, anywhere.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-col">
+                        <h4>Docs</h4>
+                        <a href="getting-started.html">Getting Started</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="security.html">Security</a>
+                        <a href="faq.html">FAQ</a>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Project</h4>
+                        <a href="https://github.com/stanley-sujith-nelavala/tether" target="_blank">GitHub</a>
+                        <a href="https://github.com/stanley-sujith-nelavala/tether/issues" target="_blank">Issues</a>
+                        <a href="https://github.com/stanley-sujith-nelavala/tether/releases" target="_blank">Releases</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>MIT License · Built with ❤️ and Rust</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/docs.js"></script>
+</body>
+</html>

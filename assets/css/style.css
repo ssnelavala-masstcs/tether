@@ -1,0 +1,423 @@
+/* ===== CSS Variables ===== */
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --accent: #00d4ff;
+    --accent-hover: #00b8e6;
+    --text-primary: #eee;
+    --text-secondary: #888;
+    --danger: #e94560;
+    --success: #00ff88;
+    --header-height: 3rem;
+    --preset-height: 3rem;
+    --input-height: 3rem;
+    --drawer-width: 80vw;
+    --touch-target: 44px;
+}
+
+/* ===== Reset & Base ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+}
+
+/* ===== App Layout ===== */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ===== Header ===== */
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--header-height);
+    min-height: var(--header-height);
+    padding: 0 0.75rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+#menu-btn {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#header h1 {
+    font-size: 1.1rem;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+#status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transition: background 0.3s;
+}
+
+#status-indicator.connected {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+#status-indicator.disconnected {
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+}
+
+/* ===== Preset Bar ===== */
+#preset-bar {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--bg-tertiary);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.preset-btn {
+    flex: 1;
+    min-width: 3rem;
+    min-height: var(--touch-target);
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    padding: 0 0.75rem;
+}
+
+.preset-btn:active {
+    background: var(--accent);
+    color: var(--bg-primary);
+    transform: scale(0.95);
+}
+
+/* ===== Custom Input ===== */
+#custom-input {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+#cmd-input {
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0 1rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    min-height: var(--touch-target);
+}
+
+#cmd-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#cmd-input::placeholder {
+    color: var(--text-secondary);
+}
+
+#send-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 0 1.25rem;
+    color: var(--bg-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#send-btn:active {
+    background: var(--accent-hover);
+}
+
+/* ===== Terminal Container ===== */
+#terminal-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+}
+
+#terminal {
+    width: 100%;
+    height: 100%;
+    padding: 0.25rem;
+}
+
+/* xterm overrides */
+.xterm {
+    padding: 0.25rem;
+}
+
+.xterm .xterm-viewport {
+    overflow-y: auto !important;
+}
+
+.xterm-screen {
+    padding: 0.25rem;
+}
+
+/* ===== Drawer Overlay ===== */
+#drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    z-index: 99;
+}
+
+#drawer-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ===== Drawer ===== */
+#drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--drawer-width);
+    max-width: 320px;
+    background: var(--bg-secondary);
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+}
+
+#drawer.open {
+    transform: translateX(0);
+}
+
+#drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+#drawer-header h2 {
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+#drawer-close {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#new-terminal-btn {
+    margin: 0.75rem;
+    padding: 0.75rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: var(--bg-primary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    min-height: var(--touch-target);
+    cursor: pointer;
+}
+
+#new-terminal-btn:active {
+    background: var(--accent-hover);
+}
+
+#terminal-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.terminal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    min-height: var(--touch-target);
+}
+
+.terminal-item:active {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.terminal-item.active {
+    border-left: 3px solid var(--accent);
+}
+
+.terminal-item .term-id {
+    font-size: 0.8rem;
+    font-family: monospace;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+.terminal-item .term-status {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.2);
+}
+
+.terminal-item .term-status.waiting {
+    background: var(--danger);
+    color: white;
+}
+
+.terminal-item .close-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 1.2rem;
+    min-width: 2rem;
+    min-height: 2rem;
+    cursor: pointer;
+}
+
+/* ===== Notification Banner ===== */
+#notification-banner {
+    position: fixed;
+    top: calc(var(--header-height) + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--danger);
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 200;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s ease-out;
+}
+
+#notification-banner.hidden {
+    display: none;
+}
+
+#notification-banner button {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    color: white;
+    cursor: pointer;
+    min-height: 2rem;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* ===== Mobile Optimizations ===== */
+@media (max-width: 480px) {
+    :root {
+        --touch-target: 44px;
+    }
+    
+    .xterm {
+        font-size: 12px !important;
+    }
+    
+    #preset-bar {
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .preset-btn {
+        min-width: 2.5rem;
+        font-size: 0.8rem;
+    }
+}
+
+@media (min-width: 768px) {
+    :root {
+        --drawer-width: 320px;
+    }
+    
+    .xterm {
+        font-size: 14px !important;
+    }
+}
+
+/* ===== Utility ===== */
+.hidden { display: none !important; }

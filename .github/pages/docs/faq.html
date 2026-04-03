@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ — Tether Docs</title>
+    <meta name="description" content="Frequently asked questions about Tether, the mobile web terminal controller.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/docs.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="logo-icon">🪢</span>
+                <span class="logo-text">Tether</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="../index.html">Home</a></li>
+                <li><a href="../getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="security.html">Security</a></li>
+                <li><a href="faq.html" class="active">FAQ</a></li>
+                <li><a href="https://github.com/stanley-sujith-nelavala/tether" class="nav-cta" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="doc-page">
+        <h1>FAQ</h1>
+        <p class="lead">Frequently asked questions about Tether. Can't find what you're looking for? <a href="https://github.com/stanley-sujith-nelavala/tether/issues" target="_blank">Open an issue</a>.</p>
+
+        <h2>General</h2>
+
+        <h3>What is Tether?</h3>
+        <p>Tether is a lightweight, mobile-optimized web terminal controller. It runs a local HTTP/WebSocket server on your laptop and lets you control shell sessions from your phone's browser — no cloud dependencies, fully self-hosted.</p>
+
+        <h3>Why would I use this?</h3>
+        <p>Common use cases:</p>
+        <ul>
+            <li>Monitoring long-running processes from the couch</li>
+            <li>Quick SSH sessions without opening a laptop lid</li>
+            <li>Checking server logs while away from your desk</li>
+            <li>Running commands while cooking (yes, really)</li>
+        </ul>
+
+        <h3>Is this like SSH?</h3>
+        <p>Similar concept, different implementation. SSH connects to an SSH daemon. Tether connects to a local PTY via a web interface. Tether is designed for mobile UX — touch-optimized, preset buttons, input-wait notifications.</p>
+
+        <h2>Installation</h2>
+
+        <h3>What platforms are supported?</h3>
+        <p><strong>Server:</strong> Linux (primary), macOS (supported), Windows (experimental).<br>
+        <strong>Client:</strong> Any modern browser (Chrome, Safari, Firefox, Edge).</p>
+
+        <h3>Do I need Rust installed?</h3>
+        <p>Only if you're building from source. Pre-built binaries are available on the <a href="https://github.com/stanley-sujith-nelavala/tether/releases" target="_blank">Releases page</a>.</p>
+
+        <h3>Can I install it with cargo install?</h3>
+        <p>Yes: <code class="inline">cargo install --git https://github.com/stanley-sujith-nelavala/tether.git</code></p>
+
+        <h2>Usage</h2>
+
+        <h3>How do I access Tether from my phone?</h3>
+        <ol>
+            <li>Start Tether with <code class="inline">--allow-lan</code></li>
+            <li>Note the printed IP address (e.g., <code class="inline">http://192.168.1.100:8080</code>)</li>
+            <li>Open that URL on your phone's browser</li>
+            <li>Enter the password you set</li>
+        </ol>
+
+        <h3>Can I use Tether over the internet?</h3>
+        <p>Not directly. Tether is designed for LAN use only. For remote access, place it behind a reverse proxy (nginx, caddy) with TLS. See the <a href="security.html">Security guide</a> for configuration examples.</p>
+
+        <h3>How many terminals can I run?</h3>
+        <p>As many as your system can handle. Each PTY uses ~5-10MB of RAM. 5 concurrent shells typically use ≤40MB total.</p>
+
+        <h3>What shell does it use?</h3>
+        <p>It uses your default shell (determined by the <code class="inline">$SHELL</code> environment variable). Usually bash or zsh.</p>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>"Connection refused" on my phone</h3>
+        <p>Make sure:</p>
+        <ul>
+            <li>You started Tether with <code class="inline">--allow-lan</code></li>
+            <li>Your phone is on the same WiFi network</li>
+            <li>No firewall is blocking the port (default: 8080)</li>
+            <li>The IP address hasn't changed (DHCP lease)</li>
+        </ul>
+
+        <h3>Terminal doesn't fit the screen</h3>
+        <p>The terminal should auto-resize. Try:</p>
+        <ul>
+            <li>Rotating your phone to landscape</li>
+            <li>Refreshing the page</li>
+            <li>Checking that the FitAddon is loaded (check browser console)</li>
+        </ul>
+
+        <h3>Input doesn't produce output</h3>
+        <p>Check the WebSocket connection:</p>
+        <ul>
+            <li>Open browser DevTools → Network → WS</li>
+            <li>Verify the WebSocket connection is established</li>
+            <li>Check server logs for errors</li>
+        </ul>
+
+        <h3>QR code doesn't scan</h3>
+        <p>The QR code contains the full URL including the LAN IP. If it's not scanning:</p>
+        <ul>
+            <li>Make sure your terminal font size isn't too small</li>
+            <li>Try the printed URL instead</li>
+            <li>Ensure your phone's camera has good lighting</li>
+        </ul>
+
+        <h2>Security</h2>
+
+        <h3>Is Tether secure?</h3>
+        <p>Tether uses Argon2id for password hashing, session cookies with expiry, and rate limiting. However, it does NOT use TLS — LAN traffic is unencrypted. Only use on trusted networks. See the <a href="security.html">Security guide</a> for details.</p>
+
+        <h3>Can someone on my network intercept my session?</h3>
+        <p>On an untrusted network, yes — a MITM attacker could potentially capture traffic. This is why Tether is designed for trusted LANs only. For untrusted networks, use a reverse proxy with TLS.</p>
+
+        <h3>What happens to my sessions when I close the browser?</h3>
+        <p>The WebSocket disconnect triggers a 30-second grace period. If you don't reconnect, the PTY is killed. Your shell history is preserved (it's your normal shell, after all).</p>
+
+        <h2>Development</h2>
+
+        <h3>How do I contribute?</h3>
+        <p>Fork the repo, make your changes, and open a Pull Request. See the <a href="https://github.com/stanley-sujith-nelavala/tether/blob/main/README.md" target="_blank">README</a> for development setup instructions.</p>
+
+        <h3>How do I report a bug?</h3>
+        <p><a href="https://github.com/stanley-sujith-nelavala/tether/issues" target="_blank">Open an issue</a> on GitHub with:</p>
+        <ul>
+            <li>Steps to reproduce</li>
+            <li>Expected vs actual behavior</li>
+            <li>OS, Rust version, and browser info</li>
+        </ul>
+
+        <h3>What's the license?</h3>
+        <p>MIT License. See the <a href="https://github.com/stanley-sujith-nelavala/tether/blob/main/LICENSE" target="_blank">LICENSE</a> file.</p>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>MIT License · Built with ❤️ and Rust</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/docs.js"></script>
+</body>
+</html>
