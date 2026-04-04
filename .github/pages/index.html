@@ -3,229 +3,592 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tether — Your Terminal, Anywhere</title>
-    <meta name="description" content="A lightweight, mobile-optimized web terminal controller. Mirror and control local shell sessions from your phone.">
-    <meta name="theme-color" content="#0a0a1a">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/docs.css">
+    <title>Tether - User Guide</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79b8ff;
+            --border: #30363d;
+            --success: #3fb950;
+            --warning: #d29922;
+            --code-bg: #1a1e24;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .site-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .site-header h1 {
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+
+        .site-header h1 span { color: var(--text-secondary); font-weight: normal; }
+
+        /* Layout */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: sticky;
+            top: 5rem;
+            height: fit-content;
+            max-height: calc(100vh - 6rem);
+            overflow-y: auto;
+        }
+
+        .sidebar nav a {
+            display: block;
+            padding: 0.4rem 0.75rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            border-left: 2px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .sidebar nav a:hover,
+        .sidebar nav a.active {
+            color: var(--text);
+            border-left-color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        .sidebar nav a.sub {
+            padding-left: 1.5rem;
+            font-size: 0.85rem;
+        }
+
+        .sidebar h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            padding: 1rem 0.75rem 0.25rem;
+        }
+
+        /* Content */
+        .content {
+            max-width: 800px;
+        }
+
+        .content h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .content h2 {
+            font-size: 1.5rem;
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .content h3 {
+            font-size: 1.2rem;
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        .content p { margin-bottom: 1rem; }
+
+        .content a { color: var(--accent); text-decoration: none; }
+        .content a:hover { text-decoration: underline; }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.15em 0.4em;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .content th, .content td {
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+
+        .content th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+        }
+
+        .content blockquote {
+            border-left: 3px solid var(--accent);
+            padding: 0.75rem 1rem;
+            margin: 1rem 0;
+            background: var(--bg-secondary);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .content blockquote.warning {
+            border-left-color: var(--warning);
+        }
+
+        .content ul, .content ol {
+            margin: 0.5rem 0 1rem 1.5rem;
+        }
+
+        .content li { margin-bottom: 0.3rem; }
+
+        .step {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+        }
+
+        .step h4 {
+            display: inline;
+            font-size: 1.1rem;
+        }
+
+        .diagram {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre;
+            margin: 1rem 0;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            .sidebar {
+                position: static;
+                max-height: none;
+            }
+            .sidebar nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+            .sidebar nav a {
+                border-left: none;
+                border-bottom: 2px solid transparent;
+                padding: 0.25rem 0.5rem;
+                font-size: 0.8rem;
+            }
+            .sidebar nav a:hover,
+            .sidebar nav a.active {
+                border-bottom-color: var(--accent);
+            }
+            .sidebar h3 { display: none; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="index.html" class="nav-logo">
-                <span class="logo-icon">🪢</span>
-                <span class="logo-text">Tether</span>
-            </a>
-            <button class="nav-toggle" aria-label="Toggle menu">
-                <span></span><span></span><span></span>
-            </button>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="getting-started.html">Getting Started</a></li>
-                <li><a href="architecture.html">Architecture</a></li>
-                <li><a href="security.html">Security</a></li>
-                <li><a href="faq.html">FAQ</a></li>
-                <li><a href="https://github.com/ssnelavala-masstcs/tether" class="nav-cta" target="_blank">GitHub</a></li>
-            </ul>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <header class="hero">
-        <div class="hero-bg">
-            <div class="gradient-orb orb-1"></div>
-            <div class="gradient-orb orb-2"></div>
-            <div class="gradient-orb orb-3"></div>
-            <div class="grid-overlay"></div>
-        </div>
-        <div class="hero-content">
-            <div class="hero-badge">
-                <span class="badge-dot"></span>
-                <span>v1.0 — Now Available</span>
-            </div>
-            <h1 class="hero-title">
-                Your Terminal,<br>
-                <span class="gradient-text">Anywhere.</span>
-            </h1>
-            <p class="hero-subtitle">
-                A lightweight, mobile-optimized web terminal controller that mirrors and controls 
-                local shell sessions from your phone — zero cloud dependencies, fully self-hosted.
-            </p>
-            <div class="hero-actions">
-                <a href="getting-started.html" class="btn btn-primary">
-                    Get Started
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="https://github.com/ssnelavala-masstcs/tether" class="btn btn-secondary" target="_blank">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                    View on GitHub
-                </a>
-            </div>
-            <div class="hero-stats">
-                <div class="stat">
-                    <span class="stat-value">≤150ms</span>
-                    <span class="stat-label">Input→Output Latency</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">≤40MB</span>
-                    <span class="stat-label">Memory (5 shells)</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">0</span>
-                    <span class="stat-label">Cloud Dependencies</span>
-                </div>
-            </div>
-        </div>
-        <div class="hero-visual">
-            <div class="phone-mockup">
-                <div class="phone-screen">
-                    <div class="mock-terminal">
-                        <div class="mock-header">
-                            <span class="mock-dot red"></span>
-                            <span class="mock-dot yellow"></span>
-                            <span class="mock-dot green"></span>
-                            <span class="mock-title">tether — bash</span>
-                        </div>
-                        <div class="mock-body">
-                            <div class="mock-line"><span class="mock-prompt">$</span> <span class="mock-cmd">ls -la</span></div>
-                            <div class="mock-line mock-output">total 48</div>
-                            <div class="mock-line mock-output">drwxr-xr-x  8 user  4096 Apr  3</div>
-                            <div class="mock-line mock-output">-rw-r--r--  1 user  1234 Apr  3</div>
-                            <div class="mock-line"><span class="mock-prompt">$</span> <span class="mock-cursor">█</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <header class="site-header">
+        <h1>🪢 Tether <span>User Guide</span></h1>
     </header>
 
-    <!-- Features Grid -->
-    <section class="features">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-label">Features</span>
-                <h2 class="section-title">Everything you need for<br><span class="gradient-text">mobile terminal control</span></h2>
-            </div>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">📱</div>
-                    <h3>Mobile-First UI</h3>
-                    <p>Touch-optimized, responsive xterm.js interface designed specifically for phones and tablets.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔐</div>
-                    <h3>Password Auth</h3>
-                    <p>Argon2id hashed passwords with session cookies, rate limiting, and 7-day expiry.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🖥️</div>
-                    <h3>Multi-PTY</h3>
-                    <p>Spawn and manage multiple terminal sessions simultaneously with a swipeable drawer.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Real-Time</h3>
-                    <p>WebSocket-based streaming with ≤150ms input→output latency on your LAN.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🎛️</div>
-                    <h3>Preset Commands</h3>
-                    <p>Quick-tap buttons for common commands — ls, top, df, free — one tap away.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📦</div>
-                    <h3>Single Binary</h3>
-                    <p>Frontend embedded via rust-embed. No npm, no external dependencies, just run.</p>
-                </div>
-            </div>
-        </div>
-    </section>
+    <div class="container">
+        <aside class="sidebar">
+            <nav>
+                <h3>Getting Started</h3>
+                <a href="#overview">Overview</a>
+                <a href="#installation">Installation</a>
+                <a href="#quick-start">Quick Start</a>
 
-    <!-- Quick Start -->
-    <section class="quick-start">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-label">Quick Start</span>
-                <h2 class="section-title">Up and running in <span class="gradient-text">30 seconds</span></h2>
-            </div>
-            <div class="steps">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h3>Install</h3>
-                        <div class="code-block">
-                            <code>git clone https://github.com/ssnelavala-masstcs/tether.git
+                <h3>Features</h3>
+                <a href="#tmux-mirroring">tmux Session Mirroring</a>
+                <a href="#fresh-pty">Fresh PTY Terminals</a>
+                <a href="#web-interface">Web Interface</a>
+
+                <h3>Usage</h3>
+                <a href="#cli-options">CLI Options</a>
+                <a href="#phone-access">Phone Access</a>
+                <a href="#tmux-tips">tmux Tips</a>
+
+                <h3>Advanced</h3>
+                <a href="#architecture">Architecture</a>
+                <a href="#security">Security</a>
+                <a href="#troubleshooting">Troubleshooting</a>
+                <a href="#development">Development</a>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <section id="overview">
+                <h1>Overview</h1>
+                <p><strong>Tether</strong> is a mobile web terminal controller that lets you access and control your laptop's terminal sessions from your phone over your local network. It works in two modes:</p>
+
+                <ul>
+                    <li><strong>tmux Session Mirroring</strong> — Auto-discovers your existing tmux sessions and shows them as panels in the web app. Input and output sync bidirectionally between your laptop and phone.</li>
+                    <li><strong>Fresh PTY Terminals</strong> — Spawns brand new bash sessions with full terminal emulation when tmux isn't available.</li>
+                </ul>
+
+                <div class="diagram">┌─────────────────────┐              ┌─────────────────────┐
+│  Your Laptop          │              │  Your Phone           │
+│                       │              │                       │
+│  tmux session: work   │   ◄──────►   │  Panel: bash (%0)     │
+│  ┌─────────────────┐  │   WiFi/WS    │  ┌───────────────┐    │
+│  │ $ ls             │  │ ◄────────►  │  │ $ ls           │   │
+│  │ file1  file2     │  │             │  │ file1  file2   │   │
+│  │ $ _              │  │             │  │ $ _            │   │
+│  └─────────────────┘  │             │  └───────────────┘    │
+└─────────────────────┘              └─────────────────────┘</div>
+            </section>
+
+            <section id="installation">
+                <h2>Installation</h2>
+
+                <h3>Prerequisites</h3>
+                <ul>
+                    <li><strong>Rust 1.75+</strong> — <a href="https://rustup.rs/">Install via rustup</a></li>
+                    <li><strong>tmux</strong> (recommended) — For session mirroring</li>
+                    <li><strong>Linux or macOS</strong> — PTY support via POSIX APIs</li>
+                </ul>
+
+                <h3>Install tmux</h3>
+                <pre><code># Debian/Ubuntu
+sudo apt install tmux
+
+# macOS
+brew install tmux
+
+# Fedora
+sudo dnf install tmux</code></pre>
+
+                <h3>Build from Source</h3>
+                <pre><code>git clone https://github.com/ssnelavala-masstcs/tether.git
 cd tether
-cargo build --release</code>
-                            <button class="copy-btn" onclick="copyCode(this)">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h3>Run</h3>
-                        <div class="code-block">
-                            <code>./target/release/tether serve --password "secret" --allow-lan</code>
-                            <button class="copy-btn" onclick="copyCode(this)">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h3>Access from Phone</h3>
-                        <p>Open the printed URL (e.g., <code class="inline">http://192.168.1.100:8080</code>) on your phone's browser, enter the password, and start controlling your terminal.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="cta-center">
-                <a href="getting-started.html" class="btn btn-primary btn-lg">
-                    Full Documentation
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-            </div>
-        </div>
-    </section>
+cargo build --release
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <span class="logo-icon">🪢</span>
-                    <span class="logo-text">Tether</span>
-                    <p>Your terminal, anywhere.</p>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-col">
-                        <h4>Docs</h4>
-                        <a href="getting-started.html">Getting Started</a>
-                        <a href="architecture.html">Architecture</a>
-                        <a href="security.html">Security</a>
-                        <a href="faq.html">FAQ</a>
-                    </div>
-                    <div class="footer-col">
-                        <h4>Project</h4>
-                        <a href="https://github.com/ssnelavala-masstcs/tether" target="_blank">GitHub</a>
-                        <a href="https://github.com/ssnelavala-masstcs/tether/issues" target="_blank">Issues</a>
-                        <a href="https://github.com/ssnelavala-masstcs/tether/releases" target="_blank">Releases</a>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>MIT License · Built with ❤️ and Rust</p>
-            </div>
-        </div>
-    </footer>
+# Binary is at: target/release/tether</code></pre>
+            </section>
 
-    <script src="js/docs.js"></script>
+            <section id="quick-start">
+                <h2>Quick Start</h2>
+
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <h4>Start tmux sessions</h4>
+                    <pre><code>tmux new -s work    # Create a session named "work"
+# Press Ctrl+B, then D to detach
+
+tmux new -s monitor # Create another session</code></pre>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <h4>Start Tether</h4>
+                    <pre><code>./target/release/tether serve --password "yourpassword" --allow-lan</code></pre>
+                    <p>You'll see output like:</p>
+                    <pre><code>INFO Starting Tether server on http://0.0.0.0:8080
+INFO Discovered 3 terminal tabs
+INFO   mirror-0 -> /dev/pts/10 (PID 1234, cmd: bash)
+INFO Access Tether at: http://192.168.1.100:8080</code></pre>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <h4>Open on your phone</h4>
+                    <p>Open the URL shown in the logs (e.g., <code>http://192.168.1.100:8080</code>) on your phone's browser.</p>
+                </div>
+
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <h4>Login and use</h4>
+                    <p>Enter your password. Your tmux sessions appear as tabs — tap to switch between them. Type commands just like a real terminal.</p>
+                </div>
+            </section>
+
+            <section id="tmux-mirroring">
+                <h2>tmux Session Mirroring</h2>
+                <p>When you start Tether, it automatically discovers tmux sessions and creates mirror panels for each pane.</p>
+
+                <h3>How it works</h3>
+                <table>
+                    <tr><th>Direction</th><th>Mechanism</th></tr>
+                    <tr><td>Laptop → Phone (output)</td><td><code>tmux capture-pane -p -e</code> polled every 200ms</td></tr>
+                    <tr><td>Phone → Laptop (input)</td><td><code>tmux send-keys</code> for each keystroke</td></tr>
+                </table>
+
+                <h3>What gets discovered</h3>
+                <ul>
+                    <li>All tmux sessions and their panes</li>
+                    <li>Each pane becomes a separate tab in the web app</li>
+                    <li>Non-tmux bash sessions are also discovered (but require manual setup for mirroring)</li>
+                </ul>
+
+                <blockquote>
+                    <strong>Tip:</strong> Name your tmux sessions meaningfully (e.g., <code>tmux new -s server</code>, <code>tmux new -s logs</code>) so they're easy to identify in the web app.
+                </blockquote>
+            </section>
+
+            <section id="fresh-pty">
+                <h2>Fresh PTY Terminals</h2>
+                <p>If no tmux sessions are found, or when you tap <strong>"+ New"</strong>, Tether creates a brand new bash session using raw <code>forkpty</code>.</p>
+
+                <ul>
+                    <li>Full PTY with proper terminal emulation (colors, cursor movement, etc.)</li>
+                    <li>Independent from your laptop's existing terminals</li>
+                    <li>Supports resize events, scrollback, and all xterm.js features</li>
+                </ul>
+
+                <blockquote>
+                    <strong>Note:</strong> Fresh PTY terminals are not connected to your laptop's existing sessions. They're standalone bash sessions created specifically for the web app.
+                </blockquote>
+            </section>
+
+            <section id="web-interface">
+                <h2>Web Interface</h2>
+
+                <h3>Dashboard Layout</h3>
+                <ul>
+                    <li><strong>Header</strong> — App title, "+ New" button, "↻" refresh button</li>
+                    <li><strong>Tabs bar</strong> — One tab per terminal/session, with connection status indicator</li>
+                    <li><strong>Terminal area</strong> — Full-screen xterm.js terminal for the active tab</li>
+                </ul>
+
+                <h3>Tab Controls</h3>
+                <table>
+                    <tr><th>Element</th><th>Action</th></tr>
+                    <tr><td>Tab click</td><td>Switch to that terminal</td></tr>
+                    <tr><td>✕ on tab</td><td>Close that terminal (disconnects WebSocket)</td></tr>
+                    <tr><td>Green dot</td><td>Connected and streaming</td></tr>
+                    <tr><td>Red dot</td><td>Disconnected (will auto-reconnect)</td></tr>
+                </table>
+
+                <h3>Terminal Features</h3>
+                <ul>
+                    <li>Full keyboard input (letters, numbers, special characters, arrows)</li>
+                    <li>Copy/paste via phone clipboard</li>
+                    <li>Auto-resize on orientation change</li>
+                    <li>10,000 line scrollback buffer</li>
+                    <li>Gruvbox-inspired color theme</li>
+                </ul>
+            </section>
+
+            <section id="cli-options">
+                <h2>CLI Options</h2>
+                <pre><code>Usage: tether serve [OPTIONS]
+
+Options:
+  -p, --password &lt;PASSWORD&gt;  Password for authentication
+  -P, --port &lt;PORT&gt;          Port to bind to [default: 8080]
+      --allow-lan            Allow LAN access (binds to 0.0.0.0)
+  -h, --help                 Print help</code></pre>
+
+                <h3>Examples</h3>
+                <pre><code># Localhost only (default)
+./target/release/tether serve --password "secret"
+
+# LAN access on custom port
+./target/release/tether serve --password "secret" --allow-lan --port 3000</code></pre>
+            </section>
+
+            <section id="phone-access">
+                <h2>Phone Access</h2>
+
+                <h3>Method 1: Direct IP</h3>
+                <ol>
+                    <li>Start Tether with <code>--allow-lan</code></li>
+                    <li>Note the IP address in the server logs</li>
+                    <li>Open that URL on your phone's browser</li>
+                </ol>
+
+                <h3>Method 2: QR Code</h3>
+                <p>Tether prints a QR code in the server logs when started with <code>--allow-lan</code>. Scan it with your phone's camera to open the URL instantly.</p>
+
+                <h3>Method 3: ngrok (remote access)</h3>
+                <pre><code># In one terminal, start tether
+./target/release/tether serve --password "secret" --port 8080
+
+# In another terminal, start ngrok
+ngrok http 8080
+
+# Open the ngrok URL on your phone from anywhere</code></pre>
+
+                <blockquote class="warning">
+                    <strong>Warning:</strong> When using ngrok or any public tunnel, your Tether instance is exposed to the internet. Use a strong password and consider additional security layers.
+                </blockquote>
+            </section>
+
+            <section id="tmux-tips">
+                <h2>tmux Tips for Tether</h2>
+                <ul>
+                    <li><strong>Detach, don't kill:</strong> Press <code>Ctrl+B, D</code> to detach from tmux. Sessions keep running and Tether keeps mirroring them.</li>
+                    <li><strong>Multiple panes:</strong> Each tmux pane becomes a separate tab in Tether. Split panes with <code>Ctrl+B, %</code> (vertical) or <code>Ctrl+B, "</code> (horizontal).</li>
+                    <li><strong>Named sessions:</strong> Use <code>tmux new -s name</code> for easy identification.</li>
+                    <li><strong>Long-running commands:</strong> Commands like <code>top</code>, <code>htop</code>, <code>tail -f</code> stream output in real-time to the web app.</li>
+                </ul>
+            </section>
+
+            <section id="architecture">
+                <h2>Architecture</h2>
+                <pre><code>┌──────────────────────────────────────────────────┐
+│  Your Laptop                                      │
+│                                                    │
+│  ┌────────────┐  ┌────────────┐  ┌──────────────┐ │
+│  │ Axum HTTP  │  │ PTY Mgr    │  │ Mirror Mgr   │ │
+│  │ + WS Srv   │◄►│ (forkpty)  │  │ (tmux CLI)   │ │
+│  └─────┬──────┘  └────────────┘  └──────┬───────┘ │
+│        │                                 │         │
+│        │  WebSocket (real-time I/O)      │         │
+│        ▼                                 ▼         │
+└────────┬─────────────────────────────────┬────────┘
+         │ LAN (WiFi)                      │
+         ▼                                 ▼
+┌──────────────────────────────────────────────────┐
+│  Your Phone                                       │
+│                                                    │
+│  ┌────────────────────────────────────────────┐   │
+│  │  xterm.js Terminal (real-time rendering)   │   │
+│  │  [Tab 1] [Tab 2] [Tab 3]  [+ New] [↻]     │   │
+│  └────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────┘</code></pre>
+            </section>
+
+            <section id="security">
+                <h2>Security</h2>
+                <table>
+                    <tr><th>Layer</th><th>Implementation</th></tr>
+                    <tr><td>Access Control</td><td>Argon2id password hashing, session cookies with 7-day expiry</td></tr>
+                    <tr><td>Rate Limiting</td><td>5 failed attempts per 10-minute window per IP</td></tr>
+                    <tr><td>Network</td><td>Defaults to 127.0.0.1; 0.0.0.0 only with --allow-lan</td></tr>
+                    <tr><td>Cookies</td><td>HttpOnly, SameSite=Strict, Path=/</td></tr>
+                </table>
+
+                <blockquote class="warning">
+                    <strong>Warning:</strong> Tether is designed for trusted LAN environments. Do not expose it to the public internet without additional security (reverse proxy, TLS, firewall rules).
+                </blockquote>
+            </section>
+
+            <section id="troubleshooting">
+                <h2>Troubleshooting</h2>
+
+                <h3>No tmux sessions discovered</h3>
+                <pre><code># Check if tmux is running
+tmux list-sessions
+
+# If not, start a session
+tmux new -s work</code></pre>
+
+                <h3>Terminal not responding</h3>
+                <ul>
+                    <li>Tap the ↻ refresh button to reconnect</li>
+                    <li>Check that the tmux session is still alive</li>
+                    <li>Restart Tether if needed</li>
+                </ul>
+
+                <h3>Can't connect from phone</h3>
+                <ul>
+                    <li>Ensure both devices are on the same WiFi network</li>
+                    <li>Check firewall settings on your laptop</li>
+                    <li>Verify the IP address is correct</li>
+                    <li>Try <code>curl http://&lt;ip&gt;:8080</code> from another machine to test</li>
+                </ul>
+            </section>
+
+            <section id="development">
+                <h2>Development</h2>
+                <pre><code># Clone
+git clone https://github.com/ssnelavala-masstcs/tether.git
+cd tether
+
+# Run with debug logging
+RUST_LOG=debug cargo run -- serve --password "dev"
+
+# Build release
+cargo build --release
+
+# Code quality
+cargo clippy -- -D warnings
+cargo fmt --check</code></pre>
+
+                <h3>Project Structure</h3>
+                <pre><code>src/
+├── main.rs             # CLI entry point
+├── server.rs           # Axum HTTP server + routing
+├── pty_manager.rs      # forkpty: spawn/resize/kill PTYs
+├── terminal_mirror.rs  # tmux discovery + mirroring
+├── auth.rs             # Argon2 password + sessions
+├── ws_handler.rs       # WebSocket ↔ PTY/tmux bridge
+└── state.rs            # Shared app state
+
+assets/
+├── index.html          # Dashboard
+├── login.html          # Login page
+├── css/style.css       # Mobile-first styles
+└── js/app.js           # Frontend logic</code></pre>
+            </section>
+        </main>
+    </div>
 </body>
 </html>

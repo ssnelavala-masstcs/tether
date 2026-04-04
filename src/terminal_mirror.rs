@@ -1,7 +1,5 @@
 use dashmap::DashMap;
 use serde::Serialize;
-use std::io::{BufReader, Read};
-use std::os::unix::io::FromRawFd;
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -13,13 +11,14 @@ pub struct TerminalInfo {
     pub pts_path: String,
     pub pid: u32,
     pub command: String,
-    pub fifo_path: String,
+    pub tmux_session: String,
+    pub tmux_pane: String,
     pub is_setup: bool,
-    pub setup_command: String,
 }
 
 struct MirrorState {
     subscribers: Vec<tokio::sync::mpsc::Sender<String>>,
+    last_content: String,
 }
 
 pub struct TerminalMirror {
@@ -35,39 +34,116 @@ impl TerminalMirror {
         }
     }
 
-    /// Discover all bash shells under gnome-terminal-server and store them
+    /// Discover tmux sessions and map them to existing terminals
     pub fn discover_terminals(&self) -> Result<Vec<TerminalInfo>, String> {
-        // Clear existing entries first
         self.terminals.clear();
 
-        let gts_output = Command::new("sh")
-            .arg("-c")
-            .arg("pgrep -f 'gnome-terminal-server' | head -1")
-            .output()
-            .map_err(|e| format!("Failed to find gnome-terminal-server: {}", e))?;
-
-        let gts_pid_str = String::from_utf8_lossy(&gts_output.stdout).trim().to_string();
-        if gts_pid_str.is_empty() {
-            return Err("gnome-terminal-server not found".to_string());
+        // Check if tmux is available
+        let tmux_check = Command::new("tmux")
+            .arg("list-sessions")
+            .output();
+        
+        if tmux_check.is_err() {
+            return Err("tmux not available".to_string());
         }
 
-        let gts_pid: u32 = gts_pid_str
-            .parse()
-            .map_err(|e| format!("Invalid PID: {}", e))?;
+        let output = tmux_check.unwrap();
+        if !output.status.success() {
+            return Err("no tmux sessions".to_string());
+        }
 
-        let children_output = Command::new("sh")
-            .arg("-c")
-            .arg(&format!("ps --ppid {} -o pid= 2>/dev/null", gts_pid))
-            .output()
-            .map_err(|e| format!("Failed to list children: {}", e))?;
-
+        let sessions_str = String::from_utf8_lossy(&output.stdout);
         let mut terminals = Vec::new();
         let mut idx = 0;
 
-        for line in String::from_utf8_lossy(&children_output.stdout).lines() {
-            let line = line.trim();
-            if line.is_empty() { continue; }
-            let pid: u32 = match line.parse() { Ok(p) => p, Err(_) => continue };
+        for line in sessions_str.lines() {
+            // Format: "session_name: windows (created ...)"
+            let session_name = match line.split(':').next() {
+                Some(n) => n.trim(),
+                None => continue,
+            };
+
+            // Get panes for this session
+            let panes_output = Command::new("tmux")
+                .arg("list-panes")
+                .arg("-t")
+                .arg(session_name)
+                .arg("-F")
+                .arg("#{pane_id} #{pane_pid} #{pane_tty}")
+                .output();
+
+            if let Ok(panes) = panes_output {
+                let panes_str = String::from_utf8_lossy(&panes.stdout);
+                for pane_line in panes_str.lines() {
+                    let parts: Vec<&str> = pane_line.split_whitespace().collect();
+                    if parts.len() < 3 { continue; }
+
+                    let pane_id = parts[0];
+                    let pid: u32 = parts[1].parse().unwrap_or(0);
+                    let pts_path = parts[2];
+
+                    let id = format!("mirror-{}", idx);
+                    let info = TerminalInfo {
+                        id: id.clone(),
+                        pts_path: pts_path.to_string(),
+                        pid,
+                        command: "bash".to_string(),
+                        tmux_session: session_name.to_string(),
+                        tmux_pane: pane_id.to_string(),
+                        is_setup: self.mirrors.contains_key(&id),
+                    };
+
+                    self.terminals.insert(id.clone(), info.clone());
+                    terminals.push(info);
+                    idx += 1;
+                }
+            }
+        }
+
+        // Also discover non-tmux bash sessions
+        let bash_terminals = self._discover_all_bash();
+        for info in bash_terminals {
+            // Skip if we already have this pts_path
+            let exists = self.terminals.iter().any(|e| e.value().pts_path == info.pts_path);
+            if !exists {
+                self.terminals.insert(info.id.clone(), info.clone());
+                terminals.push(info);
+            }
+        }
+
+        if terminals.is_empty() {
+            return Err("No terminal sessions found".to_string());
+        }
+
+        Ok(terminals)
+    }
+
+    fn _discover_all_bash(&self) -> Vec<TerminalInfo> {
+        let mut terminals = Vec::new();
+        let mut idx = self.terminals.len();
+
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg("ps -eo pid,tty,comm= 2>/dev/null | grep '/pts/' | grep -E 'bash|zsh|sh|fish' | grep -v 'tmux'")
+            .output();
+
+        let output_str = match output {
+            Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+            Err(_) => return terminals,
+        };
+
+        let my_pid = std::process::id();
+
+        for line in output_str.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 3 { continue; }
+
+            let pid: u32 = match parts[0].parse() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            if pid == my_pid || pid > my_pid + 100 { continue; }
 
             let pts_path = match std::fs::read_link(format!("/proc/{}/fd/0", pid)) {
                 Ok(path) => {
@@ -81,136 +157,116 @@ impl TerminalMirror {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|_| "unknown".to_string());
 
-            let id = format!("term-{}", idx);
-            let fifo_path = format!("/tmp/tether-mirror-{}", id);
-            let setup_command = format!("exec > >(tee {} >&1) 2>&1", fifo_path);
-
+            let id = format!("mirror-{}", idx);
             let info = TerminalInfo {
-                id: id.clone(), pts_path: pts_path.clone(), pid, command: command.clone(),
-                fifo_path: fifo_path.clone(), is_setup: self.mirrors.contains_key(&id),
-                setup_command: setup_command.clone(),
+                id: id.clone(),
+                pts_path,
+                pid,
+                command,
+                tmux_session: String::new(),
+                tmux_pane: String::new(),
+                is_setup: false,
             };
-
-            // Store in the DashMap
-            self.terminals.insert(id.clone(), info.clone());
 
             terminals.push(info);
             idx += 1;
         }
 
-        Ok(terminals)
+        terminals
     }
 
     pub fn start_mirror(&self, id: &str) -> Result<String, String> {
         info!("start_mirror called for {}", id);
         let terminal = self.terminals.get(id)
             .ok_or_else(|| format!("Terminal {} not found", id))?;
-        let fifo_path = terminal.value().fifo_path.clone();
-        let pts_path = terminal.value().pts_path.clone();
+        
+        let tmux_session = terminal.value().tmux_session.clone();
+        let tmux_pane = terminal.value().tmux_pane.clone();
+        let has_tmux = !tmux_session.is_empty();
         let id_str = id.to_string();
-        info!("Found terminal {}, fifo_path={}, pts_path={}", id, fifo_path, pts_path);
 
-        let _ = std::fs::remove_file(&fifo_path);
-        let _ = Command::new("mkfifo").arg(&fifo_path).output();
-        info!("Created FIFO at {}", fifo_path);
-
-        // Build the setup command that pipes terminal output to our FIFO
-        let setup_command = format!("exec > >(tee {} >&1) 2>&1\n", fifo_path);
-
-        // Automatically inject the setup command into the terminal
-        // We CAN write to /dev/pts/N even though we can't read from it
-        // Strategy: send Ctrl+C to get to a clean prompt, wait, then send the command
-        info!("Injecting setup command into {}...", pts_path);
-
-        // Step 1: Send Ctrl+C to interrupt any running command
-        let _ = std::fs::write(&pts_path, "\x03");
-        std::thread::sleep(std::time::Duration::from_millis(300));
-
-        // Step 2: Send Ctrl+L to clear screen and ensure we're at a prompt
-        let _ = std::fs::write(&pts_path, "\x0c");
-        std::thread::sleep(std::time::Duration::from_millis(200));
-
-        // Step 3: Send the setup command with a newline
-        std::fs::write(&pts_path, &setup_command)
-            .map_err(|e| format!("Failed to inject setup command into {}: {}", pts_path, e))?;
-        info!("Injected setup command into {}", pts_path);
-
-        // Step 4: Wait for the tee process to start
-        std::thread::sleep(std::time::Duration::from_secs(1));
-
-        // Step 5: Verify tee is running by checking for children
-        let tee_check = Command::new("sh")
-            .arg("-c")
-            .arg(&format!("ps --ppid {} -o pid,cmd= 2>/dev/null | grep tee | grep -v grep", terminal.value().pid))
-            .output();
-        if let Ok(output) = tee_check {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-            if output_str.contains("tee") {
-                info!("Verified: tee process running for {}", id_str);
-            } else {
-                warn!("WARNING: tee process not found for {} - command may not have executed", id_str);
-            }
+        if has_tmux {
+            info!("Using tmux capture for {} (session={}, pane={})", id, tmux_session, tmux_pane);
+        } else {
+            info!("Using FIFO method for {} (pts={})", id, terminal.value().pts_path);
         }
 
-        let mirror_state = Arc::new(Mutex::new(MirrorState { subscribers: Vec::new() }));
+        let mirror_state = Arc::new(Mutex::new(MirrorState {
+            subscribers: Vec::new(),
+            last_content: String::new(),
+        }));
         let mirror_clone = mirror_state.clone();
-        let fifo_clone = fifo_path.clone();
+
         let id_clone = id_str.clone();
+        let tmux_pane_clone = tmux_pane.clone();
+        let tmux_session_clone = tmux_session.clone();
 
         std::thread::spawn(move || {
             info!("Reader thread starting for {}", id_clone);
-            // Open FIFO with O_RDWR - this never blocks and keeps the FIFO open
-            // even when no external writer is connected. The write end we hold
-            // prevents EOF when the tee process disconnects.
-            let fd = unsafe {
-                libc::open(fifo_clone.as_ptr() as *const libc::c_char, libc::O_RDWR)
-            };
-            if fd < 0 {
-                warn!("Failed to open FIFO for {}: {}", id_clone, std::io::Error::last_os_error());
-                return;
-            }
-            info!("Opened FIFO fd={} (O_RDWR) for {}", fd, id_clone);
+            
+            let mut poll_interval = std::time::Duration::from_millis(200);
 
-            let mut reader = BufReader::new(unsafe { std::fs::File::from_raw_fd(fd) });
-            let mut buffer = [0u8; 4096];
             loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) => {
-                        // Should never happen with O_RDWR since we hold the write end
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
-                    }
-                    Ok(n) => {
-                        let text = String::from_utf8_lossy(&buffer[..n]).to_string();
-                        let state = mirror_clone.lock().unwrap();
-                        let mut to_remove = Vec::new();
-                        for (i, tx) in state.subscribers.iter().enumerate() {
-                            if tx.blocking_send(text.clone()).is_err() { to_remove.push(i); }
+                let content = if has_tmux {
+                    // Use tmux capture-pane for reliable output
+                    let capture = Command::new("tmux")
+                        .arg("capture-pane")
+                        .arg("-t")
+                        .arg(&tmux_pane_clone)
+                        .arg("-p")
+                        .arg("-e")
+                        .output();
+
+                    match capture {
+                        Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+                        Err(e) => {
+                            warn!("tmux capture error for {}: {}", id_clone, e);
+                            std::thread::sleep(poll_interval);
+                            continue;
                         }
-                        drop(state);
-                        let mut state = mirror_clone.lock().unwrap();
-                        for i in to_remove.into_iter().rev() { state.subscribers.remove(i); }
                     }
-                    Err(e) => {
-                        warn!("Read error for {}: {}", id_clone, e);
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
+                } else {
+                    // For non-tmux terminals, try to read from /proc/[pid]/fd/1
+                    // This only works for terminals that have readable output
+                    std::thread::sleep(poll_interval);
+                    continue;
+                };
+
+                let mut state = mirror_clone.lock().unwrap();
+                
+                // Only send if content changed
+                if content != state.last_content && !content.is_empty() {
+                    state.last_content = content.clone();
+                    
+                    let to_remove: Vec<usize> = state.subscribers.iter()
+                        .enumerate()
+                        .filter(|(_, tx)| tx.blocking_send(content.clone()).is_err())
+                        .map(|(i, _)| i)
+                        .collect();
+                    
+                    for i in to_remove.into_iter().rev() {
+                        state.subscribers.remove(i);
                     }
                 }
+                
+                drop(state);
+                std::thread::sleep(poll_interval);
             }
         });
 
-        info!("Inserting mirror state for {}", id_str);
         self.mirrors.insert(id_str.clone(), mirror_state);
-
         info!("Started mirror for terminal {}", id);
-        Ok(fifo_path)
+        Ok(id_str)
     }
 
     pub fn subscribe(&self, id: &str) -> Result<tokio::sync::mpsc::Receiver<String>, String> {
         let (tx, rx) = tokio::sync::mpsc::channel::<String>(256);
         if let Some(mirror) = self.mirrors.get(id) {
             let mut state = mirror.value().lock().unwrap();
+            // Send initial content if available
+            if !state.last_content.is_empty() {
+                let _ = tx.blocking_send(state.last_content.clone());
+            }
             state.subscribers.push(tx);
         } else {
             return Err(format!("Mirror for {} not started", id));
@@ -222,10 +278,29 @@ impl TerminalMirror {
     pub fn send_input(&self, id: &str, text: &str) -> Result<(), String> {
         let terminal = self.terminals.get(id)
             .ok_or_else(|| format!("Terminal {} not found", id))?;
-        let pts_path = terminal.value().pts_path.clone();
-        std::fs::write(&pts_path, text)
-            .map_err(|e| format!("Failed to write to {}: {}", pts_path, e))?;
-        Ok(())
+        
+        let tmux_session = terminal.value().tmux_session.clone();
+        let tmux_pane = terminal.value().tmux_pane.clone();
+        let has_tmux = !tmux_session.is_empty();
+
+        if has_tmux {
+            // Use tmux send-keys for reliable input
+            let result = Command::new("tmux")
+                .arg("send-keys")
+                .arg("-t")
+                .arg(&tmux_pane)
+                .arg(text)
+                .output();
+            
+            match result {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("tmux send-keys error: {}", e)),
+            }
+        } else {
+            // Fallback: write to /dev/pts/N
+            std::fs::write(&terminal.value().pts_path, text)
+                .map_err(|e| format!("Failed to write to {}: {}", terminal.value().pts_path, e))
+        }
     }
 
     pub fn get_all_terminals(&self) -> Vec<TerminalInfo> {

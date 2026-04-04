@@ -20,7 +20,7 @@
     };
 
     // ===== Create Terminal Panel =====
-    function createPanel(id, label) {
+    function createPanel(id, label, isMirror) {
         terminalCounter++;
 
         // Tab button
@@ -116,11 +116,32 @@
             }
         });
 
-        // Fit and focus
-        setTimeout(() => { fitAddon.fit(); term.focus(); }, 100);
+        // Fit and focus - wait for container to have dimensions
+        function waitForFit() {
+            const container = panel.querySelector('.xterm-container');
+            const viewsEl = document.getElementById('terminal-views');
+            const headerEl = document.getElementById('header');
+            const tabsEl = document.getElementById('terminal-tabs');
+            const headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 48;
+            const tabsHeight = tabsEl ? tabsEl.getBoundingClientRect().height : 0;
+            const availableHeight = window.innerHeight - headerHeight - tabsHeight;
+
+            // Force container height
+            container.style.height = Math.max(availableHeight, 200) + 'px';
+            container.style.minHeight = Math.max(availableHeight, 200) + 'px';
+
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                fitAddon.fit();
+                term.focus();
+            } else {
+                setTimeout(waitForFit, 50);
+            }
+        }
+        setTimeout(waitForFit, 50);
 
         // Store
-        terminals.set(id, { ws: null, term, fitAddon, panel, tabBtn });
+        terminals.set(id, { ws: null, term, fitAddon, panel, tabBtn, isMirror });
         reconnectAttempts[id] = 0;
         updateEmptyState();
         return id;
@@ -134,7 +155,8 @@
         if (t.ws) t.ws.close();
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const url = `${protocol}//${window.location.host}/ws?terminal_id=${encodeURIComponent(id)}`;
+        const wsParam = t.isMirror ? 'mirror_id' : 'terminal_id';
+        const url = `${protocol}//${window.location.host}/ws?${wsParam}=${encodeURIComponent(id)}`;
         t.ws = new WebSocket(url);
 
         t.ws.onopen = () => {
@@ -228,12 +250,44 @@
             const data = await res.json();
             if (data.id) {
                 const label = `Terminal ${terminalCounter + 1}`;
-                createPanel(data.id, label);
+                createPanel(data.id, label, false);
                 connectTerminal(data.id);
                 activatePanel(data.id);
             }
         } catch(e) {
             console.error('Failed to create terminal:', e);
+        }
+    }
+
+    // ===== Discover & Mirror Laptop Terminals =====
+    async function discoverAndMirror() {
+        try {
+            const res = await fetch('/api/mirror/discover');
+            const data = await res.json();
+            if (!data.terminals || data.terminals.length === 0) {
+                console.log('No laptop terminals discovered');
+                return false;
+            }
+
+            // Setup all mirrors
+            const setupRes = await fetch('/api/mirror/setup-all', { method: 'POST' });
+            const setupData = await setupRes.json();
+            console.log('Mirror setup:', setupData);
+
+            // Create panels for each discovered terminal
+            let firstId = null;
+            for (const t of data.terminals) {
+                const label = `${t.command} (pts/${t.pts_path.split('/').pop()})`;
+                const panelId = createPanel(t.id, label, true);
+                connectTerminal(t.id);
+                if (!firstId) firstId = t.id;
+            }
+
+            if (firstId) activatePanel(firstId);
+            return true;
+        } catch(e) {
+            console.log('Could not discover/mirror laptop terminals:', e);
+            return false;
         }
     }
 
@@ -247,13 +301,18 @@
     }
 
     // ===== Init =====
-    function init() {
+    async function init() {
         els.newBtn.addEventListener('click', createNewTerminal);
         els.emptyNewBtn.addEventListener('click', createNewTerminal);
         els.refreshBtn.addEventListener('click', refreshTerminals);
 
-        // Auto-create first terminal on load
-        createNewTerminal();
+        // Try to discover and mirror laptop terminals first
+        const mirrored = await discoverAndMirror();
+
+        // If no laptop terminals found, create a fresh PTY terminal
+        if (!mirrored) {
+            createNewTerminal();
+        }
 
         // Auto-reconnect every 15s
         setInterval(refreshTerminals, 15000);

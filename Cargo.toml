@@ -13,8 +13,8 @@ axum = { version = "0.7", features = ["ws", "macros"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "trace"] }
 
-# PTY management
-portable-pty = "0.8"
+# PTY management (replaced portable-pty with raw nix)
+nix = { version = "0.27", features = ["term", "process", "fs"] }
 
 # WebSocket handling
 tokio-tungstenite = "0.21"

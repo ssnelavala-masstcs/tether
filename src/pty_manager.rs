@@ -1,5 +1,9 @@
 use dashmap::DashMap;
-use portable_pty::{CommandBuilder, PtySize};
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::pty::Winsize;
+use nix::unistd::{self, ForkResult, Pid};
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::OwnedFd;
 use std::sync::Arc;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -7,8 +11,8 @@ use uuid::Uuid;
 pub struct TerminalSession {
     #[allow(dead_code)]
     pub id: String,
-    pub pair: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
-    pub child: Arc<Mutex<Box<dyn portable_pty::Child + Send>>>,
+    pub master_fd: OwnedFd,
+    pub child_pid: Pid,
     #[allow(dead_code)]
     pub last_activity: std::time::Instant,
     pub waiting_for_input: bool,
@@ -29,40 +33,54 @@ impl PtyManager {
     }
 
     pub fn spawn_terminal(&self, shell: Option<&str>) -> Result<String, String> {
-        let pty_system = portable_pty::native_pty_system();
+        let shell_cmd = shell.unwrap_or("/bin/bash");
 
-        let size = PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
+        let winsize = Winsize {
+            ws_row: 24,
+            ws_col: 80,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
         };
 
-        let pair = pty_system
-            .openpty(size)
-            .map_err(|e| format!("Failed to open PTY: {}", e))?;
+        match unsafe { nix::pty::forkpty(&winsize, None) } {
+            Ok(result) => match result.fork_result {
+                ForkResult::Parent { child } => {
+                    let master_fd = result.master;
 
-        let shell_cmd = shell.unwrap_or("bash");
-        let cmd = CommandBuilder::new(shell_cmd);
+                    // Set master fd to non-blocking
+                    let raw_fd = master_fd.as_raw_fd();
+                    let flags = fcntl(raw_fd, FcntlArg::F_GETFL)
+                        .map_err(|e| format!("Failed to get flags: {}", e))?;
+                    let new_flags = OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK;
+                    fcntl(raw_fd, FcntlArg::F_SETFL(new_flags))
+                        .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+                    let id = Uuid::new_v4().to_string();
 
-        let id = Uuid::new_v4().to_string();
+                    let session = TerminalSession {
+                        id: id.clone(),
+                        master_fd,
+                        child_pid: child,
+                        last_activity: std::time::Instant::now(),
+                        waiting_for_input: false,
+                    };
 
-        let session = TerminalSession {
-            id: id.clone(),
-            pair: Arc::new(Mutex::new(pair.master)),
-            child: Arc::new(Mutex::new(child)),
-            last_activity: std::time::Instant::now(),
-            waiting_for_input: false,
-        };
-
-        self.terminals
-            .insert(id.clone(), Arc::new(Mutex::new(session)));
-        Ok(id)
+                    self.terminals
+                        .insert(id.clone(), Arc::new(Mutex::new(session)));
+                    Ok(id)
+                }
+                ForkResult::Child => {
+                    // Child process - exec the shell
+                    let shell_cstr = std::ffi::CString::new(shell_cmd).unwrap();
+                    unistd::execvp(&shell_cstr, &[&shell_cstr]).unwrap_or_else(|e| {
+                        eprintln!("Failed to exec {}: {}", shell_cmd, e);
+                        std::process::exit(1);
+                    });
+                    unreachable!();
+                }
+            },
+            Err(e) => Err(format!("Failed to forkpty: {}", e)),
+        }
     }
 
     pub fn get_terminal(&self, id: &str) -> Option<Arc<Mutex<TerminalSession>>> {
@@ -72,9 +90,9 @@ impl PtyManager {
     pub fn remove_terminal(&self, id: &str) -> bool {
         if let Some((_, session)) = self.terminals.remove(id) {
             if let Ok(term) = session.lock() {
-                if let Ok(mut child) = term.child.lock() {
-                    let _ = child.kill();
-                }
+                // Send SIGHUP to child
+                unsafe { libc::kill(term.child_pid.as_raw(), libc::SIGHUP) };
+                // master_fd will be closed when OwnedFd is dropped
             }
             true
         } else {
@@ -82,19 +100,24 @@ impl PtyManager {
         }
     }
 
-    #[allow(dead_code)]
     pub fn resize_terminal(&self, id: &str, rows: u16, cols: u16) -> Result<(), String> {
         if let Some(session) = self.get_terminal(id) {
             if let Ok(term) = session.lock() {
-                if let Ok(pair) = term.pair.lock() {
-                    pair.resize(PtySize {
-                        rows,
-                        cols,
-                        pixel_width: 0,
-                        pixel_height: 0,
-                    })
-                    .map_err(|e| format!("Failed to resize: {}", e))?;
+                let winsize = Winsize {
+                    ws_row: rows,
+                    ws_col: cols,
+                    ws_xpixel: 0,
+                    ws_ypixel: 0,
+                };
+                unsafe {
+                    libc::ioctl(
+                        term.master_fd.as_raw_fd(),
+                        libc::TIOCSWINSZ,
+                        &winsize as *const Winsize,
+                    );
                 }
+                // Also send SIGWINCH to the child
+                unsafe { libc::kill(term.child_pid.as_raw(), libc::SIGWINCH) };
             }
             Ok(())
         } else {
